@@ -1,0 +1,6 @@
+{
+  "name": "RideMarter",
+  "description": "Smart auto-accept landing and onboarding for Rapido, Uber & Ola drivers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">RideMarter</string>
+    <string name="accessibility_service_description">
+        RideMarter monitors Rapido, Uber, and Ola driver 
+        apps to automatically accept, reject, or ignore 
+        ride orders based on your configured settings.
+    </string>
+    <string name="accessibility_description">
+        RideMarter Auto Accept Service
+    </string>
+</resources>
