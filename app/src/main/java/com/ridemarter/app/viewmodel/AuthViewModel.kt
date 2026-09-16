@@ -14,6 +14,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
@@ -76,6 +77,12 @@ class AuthViewModel : ViewModel() {
     init {
         if (isFirebaseAvailable()) {
             checkUserStatus()
+        }
+    }
+
+    fun clearAuthErrors() {
+        if (_uiState.value is AuthState.Error) {
+            _uiState.value = AuthState.Idle
         }
     }
 
@@ -149,7 +156,15 @@ class AuthViewModel : ViewModel() {
                 }
             } catch (e: GetCredentialException) {
                 Log.w("AuthViewModel", "CredentialManager exception: ${e.message}")
-                val errMsg = e.localizedMessage ?: "Google Sign-In cancelled or failed"
+                val errMsg = if (e.message?.contains("No credentials available", ignoreCase = true) == true) {
+                    "No Google accounts found on this device. Please sign in or register with email and password."
+                } else {
+                    e.localizedMessage ?: "Google Sign-In cancelled or failed"
+                }
+                _uiState.value = AuthState.Error(errMsg)
+            } catch (e: FirebaseAuthException) {
+                Log.e("AuthViewModel", "Google Sign-In FirebaseAuthException [${e.errorCode}]", e)
+                val errMsg = "[${e.errorCode}] ${e.localizedMessage ?: e.message ?: "Google Authentication failed"}"
                 _uiState.value = AuthState.Error(errMsg)
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Google Sign-In failed", e)
@@ -177,6 +192,11 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    // 2. GET STARTED / CREATE ACCOUNT must call only: FirebaseAuth.createUserWithEmailAndPassword(email.trim(), password)
+    // 3. Never use Google AuthCredential, stale credentials, ID tokens, or signInWithCredential for email/password login or signup
+    // 6. After createUserWithEmailAndPassword succeeds, use FirebaseAuth.currentUser.uid and save the driver profile to users/{uid}
+    // 7. Do not navigate to Account Under Review unless both Authentication and Firestore profile creation succeed
+    // 8. Show the exact FirebaseAuthException error code on failure
     fun registerWithEmail(
         name: String,
         email: String,
@@ -187,7 +207,11 @@ class AuthViewModel : ViewModel() {
         onSuccess: (UserData) -> Unit,
         onError: (String) -> Unit
     ) {
-        if (email.isBlank() || pass.isBlank() || name.isBlank() || mobile.isBlank()) {
+        val trimmedEmail = email.trim()
+        val trimmedName = name.trim()
+        val trimmedMobile = mobile.trim()
+
+        if (trimmedEmail.isBlank() || pass.isBlank() || trimmedName.isBlank() || trimmedMobile.isBlank()) {
             val err = "Please fill in all required fields"
             _uiState.value = AuthState.Error(err)
             onError(err)
@@ -198,16 +222,18 @@ class AuthViewModel : ViewModel() {
             _uiState.value = AuthState.Loading
             try {
                 val authInstance = FirebaseAuth.getInstance()
-                val authResult = authInstance.createUserWithEmailAndPassword(email.trim(), pass.trim()).await()
-                val firebaseAuthUid = authResult.user?.uid ?: throw IllegalStateException("Firebase Authentication failed to return UID")
+                val authResult = authInstance.createUserWithEmailAndPassword(trimmedEmail, pass).await()
+                val currentFirebaseUser = authInstance.currentUser ?: authResult.user
+                    ?: throw IllegalStateException("Firebase Authentication failed to return user")
+                val firebaseAuthUid = currentFirebaseUser.uid
 
                 val userId = generatedUserId.ifBlank { "SD" + firebaseAuthUid.take(8).uppercase() }
                 val newUser = UserData(
                     uid = firebaseAuthUid,
                     userId = userId,
-                    name = name.trim(),
-                    email = email.trim(),
-                    mobile = mobile.trim(),
+                    name = trimmedName,
+                    email = trimmedEmail,
+                    mobile = trimmedMobile,
                     vehicleType = vehicleType,
                     planName = "none",
                     planStatus = "none",
@@ -217,8 +243,7 @@ class AuthViewModel : ViewModel() {
                     loginType = "email"
                 )
 
-                // 2. Save data in Cloud Firestore at: users/{firebaseAuthUid}
-                // Fields: name, email, mobile, vehicleType, planName, planStatus: "none", paymentStatus: "none", createdAt: server timestamp
+                // Save data in Cloud Firestore at: users/{firebaseAuthUid}
                 val db = FirebaseFirestore.getInstance()
                 val firestoreMap = hashMapOf<String, Any?>(
                     "name" to newUser.name,
@@ -239,11 +264,19 @@ class AuthViewModel : ViewModel() {
                     "serviceActive" to false
                 )
 
-                db.collection("users").document(firebaseAuthUid).set(firestoreMap, com.google.firebase.firestore.SetOptions.merge()).await()
+                db.collection("users").document(firebaseAuthUid)
+                    .set(firestoreMap, com.google.firebase.firestore.SetOptions.merge())
+                    .await()
 
+                // Only navigate / update state after BOTH Auth and Firestore write succeed
                 _currentUserData.value = newUser
                 _uiState.value = AuthState.UserPending(newUser)
                 onSuccess(newUser)
+            } catch (e: FirebaseAuthException) {
+                Log.e("AuthViewModel", "Registration FirebaseAuthException [${e.errorCode}]: ${e.message}", e)
+                val msg = "[${e.errorCode}] ${e.localizedMessage ?: e.message ?: "Registration failed"}"
+                _uiState.value = AuthState.Error(msg)
+                onError(msg)
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Registration error: ${e.message}", e)
                 val msg = e.localizedMessage ?: e.message ?: "Registration failed. Please check credentials."
@@ -253,13 +286,17 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    // 1. LOGIN with email/password must call only: FirebaseAuth.signInWithEmailAndPassword(email.trim(), password)
+    // 3. Never use Google AuthCredential, stale credentials, ID tokens, or signInWithCredential
+    // 8. Show the exact FirebaseAuthException error code on failure
     fun signInWithEmail(
         email: String,
         pass: String,
         onRequireRegistration: ((name: String, email: String) -> Unit)? = null,
         onSuccess: ((UserData) -> Unit)? = null
     ) {
-        if (email.isBlank() || pass.isBlank()) {
+        val trimmedEmail = email.trim()
+        if (trimmedEmail.isBlank() || pass.isBlank()) {
             _uiState.value = AuthState.Error("Please enter email and password")
             return
         }
@@ -268,16 +305,20 @@ class AuthViewModel : ViewModel() {
             _uiState.value = AuthState.Loading
             try {
                 val authInstance = FirebaseAuth.getInstance()
-                val authResult = authInstance.signInWithEmailAndPassword(email.trim(), pass.trim()).await()
+                val authResult = authInstance.signInWithEmailAndPassword(trimmedEmail, pass).await()
                 val user = authResult.user
                 if (user != null) {
                     fetchUserFromFirestore(user.uid, onRequireRegistration, onSuccess)
                 } else {
-                    _uiState.value = AuthState.Error("Login failed. Please check credentials.")
+                    _uiState.value = AuthState.Error("Login failed: empty user returned")
                 }
+            } catch (e: FirebaseAuthException) {
+                Log.w("AuthViewModel", "Email sign-in FirebaseAuthException [${e.errorCode}]: ${e.message}")
+                val msg = "[${e.errorCode}] ${e.localizedMessage ?: e.message ?: "Authentication failed"}"
+                _uiState.value = AuthState.Error(msg)
             } catch (e: Exception) {
                 Log.w("AuthViewModel", "Email sign-in failed: ${e.message}")
-                val msg = e.localizedMessage ?: "Invalid email or password"
+                val msg = e.localizedMessage ?: e.message ?: "Invalid email or password"
                 _uiState.value = AuthState.Error(msg)
             }
         }
@@ -291,24 +332,9 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             try {
-                // 1. Confirm FirebaseAuth.currentUser is not null before registration
-                val authInstance = auth ?: try { FirebaseAuth.getInstance() } catch (e: Exception) { null }
-                if (authInstance == null) {
-                    throw IllegalStateException("Firebase Authentication service is unavailable.")
-                }
-
-                var currentFirebaseUser = authInstance.currentUser
-
-                // Fallback attempt to sign in anonymously if no authenticated session exists
-                if (currentFirebaseUser == null) {
-                    try {
-                        val authResult = authInstance.signInAnonymously().await()
-                        currentFirebaseUser = authResult.user
-                    } catch (e: Exception) {
-                        Log.w("AuthViewModel", "Anonymous auth fallback: ${e.message}")
-                    }
-                }
-
+                // Confirm FirebaseAuth.currentUser is not null before registration
+                val authInstance = FirebaseAuth.getInstance()
+                val currentFirebaseUser = authInstance.currentUser
                 if (currentFirebaseUser == null) {
                     throw IllegalStateException("FirebaseAuth.currentUser is null. Authentication is required before registration.")
                 }
@@ -316,13 +342,6 @@ class AuthViewModel : ViewModel() {
                 val firebaseAuthUid = currentFirebaseUser.uid
                 val userId = if (userData.userId.isNotBlank()) userData.userId else "SD" + firebaseAuthUid.take(8).uppercase()
 
-                // 2. Save the profile exactly to: users/{FirebaseAuth.currentUser.uid}
-                // 3. Include:
-                //    name, email, mobile, vehicleType,
-                //    userId, approvalStatus: "pending",
-                //    planName: "none", planStatus: "none",
-                //    paymentStatus: "none",
-                //    createdAt: FieldValue.serverTimestamp()
                 val firestoreMap = hashMapOf<String, Any?>(
                     "name" to userData.name.trim(),
                     "email" to userData.email.trim(),
@@ -337,14 +356,14 @@ class AuthViewModel : ViewModel() {
                     "uid" to firebaseAuthUid,
                     "approved" to false,
                     "status" to "pending",
-                    "loginType" to userData.loginType.ifEmpty { "email" },
+                    "loginType" to userData.loginType.ifEmpty { "google" },
                     "profilePhotoUrl" to (userData.profilePhotoUrl.ifEmpty { currentFirebaseUser.photoUrl?.toString() ?: "" }),
                     "serviceActive" to false
                 )
 
-                val db = firestore ?: FirebaseFirestore.getInstance()
+                val db = FirebaseFirestore.getInstance()
 
-                // 4. Await the Firestore write result
+                // Await the Firestore write result
                 db.collection("users").document(firebaseAuthUid)
                     .set(firestoreMap, com.google.firebase.firestore.SetOptions.merge())
                     .await()
@@ -362,13 +381,16 @@ class AuthViewModel : ViewModel() {
                     status = "pending"
                 )
 
-                // 5. Navigate to Account Under Review ONLY after the Firestore write succeeds
+                // Navigate to Account Under Review ONLY after the Firestore write succeeds
                 _currentUserData.value = finalUser
                 _uiState.value = AuthState.UserPending(finalUser)
                 onSuccess()
+            } catch (e: FirebaseAuthException) {
+                Log.e("AuthViewModel", "FirebaseAuthException: ${e.message}", e)
+                val errorMessage = "[${e.errorCode}] ${e.localizedMessage ?: e.message ?: "Authentication error"}"
+                _uiState.value = AuthState.Error(errorMessage)
+                onError(errorMessage)
             } catch (e: Exception) {
-                // 6. If the write fails, remain on registration and show the exact Firebase error
-                // 7. Do not show a false success/pending screen
                 Log.e("AuthViewModel", "Firestore registration failed: ${e.message}", e)
                 val errorMessage = e.localizedMessage ?: e.message ?: "Registration failed in Firebase"
                 _uiState.value = AuthState.Error(errorMessage)

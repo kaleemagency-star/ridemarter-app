@@ -99,6 +99,11 @@ fun LoginScreen(
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var resetEmail by remember { mutableStateOf("") }
 
+    // Clear previous authentication errors when entering Login screen
+    LaunchedEffect(Unit) {
+        authViewModel.clearAuthErrors()
+    }
+
     // Listen to UI state errors and transitions
     LaunchedEffect(uiState) {
         when (val state = uiState) {
@@ -143,7 +148,10 @@ fun LoginScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = onNavigateBack,
+                        onClick = {
+                            authViewModel.clearAuthErrors()
+                            onNavigateBack()
+                        },
                         modifier = Modifier
                             .size(42.dp)
                             .clip(CircleShape)
@@ -431,7 +439,10 @@ fun LoginScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         modifier = Modifier
-                            .clickable { onNavigateToRegister() }
+                            .clickable {
+                                authViewModel.clearAuthErrors()
+                                onNavigateToRegister()
+                            }
                             .padding(4.dp)
                             .testTag("login_go_to_register_link")
                     )

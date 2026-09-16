@@ -31,9 +31,12 @@ import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ElectricRickshaw
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.TwoWheeler
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -70,7 +73,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
@@ -117,6 +123,8 @@ fun RegistrationScreen(
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf(initialEmail) }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var mobile by remember { mutableStateOf("") }
     var selectedVehicle by remember { mutableStateOf<String?>(null) } // "AUTO", "BIKE", "CAR"
     var termsAccepted by remember { mutableStateOf(false) }
@@ -125,6 +133,11 @@ fun RegistrationScreen(
     // Auto-generated user ID
     val generatedUserId = remember {
         authViewModel.generateUserId()
+    }
+
+    // Clear any previous authentication errors when entering registration
+    LaunchedEffect(Unit) {
+        authViewModel.clearAuthErrors()
     }
 
     // Sync authenticated user's email or google profile email when available if email is currently blank
@@ -139,14 +152,11 @@ fun RegistrationScreen(
         }
     }
 
-    // Listen to UI state transitions
+    // Listen to UI state transitions (errors only; pending navigation handled strictly on registration success)
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is AuthState.Error -> {
                 snackbarHostState.showSnackbar(state.message)
-            }
-            is AuthState.UserPending -> {
-                onNavigateToPending()
             }
             else -> Unit
         }
@@ -155,8 +165,9 @@ fun RegistrationScreen(
     val isNameValid = name.trim().length >= 3
     val isEmailValid = email.isNotBlank() && email.contains("@") && email.contains(".")
     val isMobileValid = mobile.length == 10 && mobile.all { it.isDigit() }
+    val isPasswordValid = isGoogleUser || password.length >= 6
     val isVehicleSelected = selectedVehicle != null
-    val canSubmit = isNameValid && isEmailValid && isMobileValid && isVehicleSelected && termsAccepted
+    val canSubmit = isNameValid && isEmailValid && isMobileValid && isPasswordValid && isVehicleSelected && termsAccepted
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -182,7 +193,10 @@ fun RegistrationScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = onNavigateBack,
+                        onClick = {
+                            authViewModel.clearAuthErrors()
+                            onNavigateBack()
+                        },
                         modifier = Modifier
                             .size(42.dp)
                             .clip(CircleShape)
@@ -303,6 +317,67 @@ fun RegistrationScreen(
                         fontSize = 11.sp,
                         modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                     )
+                }
+
+                // FIELD — Password (for Email/Password accounts)
+                if (!isGoogleUser) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Password",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        placeholder = { Text("Create password (min 6 chars)", color = DarkTextMuted, fontSize = 14.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Password Icon",
+                                tint = if (password.isNotEmpty()) BrandGreenPrimary else DarkTextMuted
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                    tint = DarkTextMuted
+                                )
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Next
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BrandGreenPrimary,
+                            unfocusedBorderColor = if (password.isNotEmpty() && !isPasswordValid) Color(0xFFE53935) else DarkCardBorder,
+                            focusedContainerColor = DarkSurface,
+                            unfocusedContainerColor = DarkSurface,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = BrandGreenPrimary
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("register_password_input")
+                    )
+                    if (password.isNotEmpty() && !isPasswordValid) {
+                        Text(
+                            text = "Password must be at least 6 characters",
+                            color = Color(0xFFE53935),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -540,38 +615,62 @@ fun RegistrationScreen(
                 // SUBMIT BUTTON "Create Account"
                 Button(
                     onClick = {
-                        val currentFirebaseUser = authViewModel.getCurrentUser()
-                        val targetUid = currentFirebaseUser?.uid ?: ""
-                        val photoUrl = currentFirebaseUser?.photoUrl?.toString() ?: ""
+                        if (isGoogleUser) {
+                            val currentFirebaseUser = authViewModel.getCurrentUser()
+                            val targetUid = currentFirebaseUser?.uid ?: ""
+                            val photoUrl = currentFirebaseUser?.photoUrl?.toString() ?: ""
 
-                        val newUser = UserData(
-                            uid = targetUid,
-                            userId = generatedUserId,
-                            name = name.trim(),
-                            email = email.trim(),
-                            mobile = mobile.trim(),
-                            vehicleType = selectedVehicle ?: "AUTO",
-                            approved = false,
-                            status = "pending",
-                            planStatus = "none",
-                            paymentStatus = "none",
-                            planName = "none",
-                            createdAt = Timestamp.now(),
-                            loginType = if (isGoogleUser) "google" else "email",
-                            profilePhotoUrl = photoUrl
-                        )
+                            val newUser = UserData(
+                                uid = targetUid,
+                                userId = generatedUserId,
+                                name = name.trim(),
+                                email = email.trim(),
+                                mobile = mobile.trim(),
+                                vehicleType = selectedVehicle ?: "AUTO",
+                                approved = false,
+                                status = "pending",
+                                planStatus = "none",
+                                paymentStatus = "none",
+                                planName = "none",
+                                createdAt = Timestamp.now(),
+                                loginType = "google",
+                                profilePhotoUrl = photoUrl
+                            )
 
-                        authViewModel.saveUserToFirestore(
-                            userData = newUser,
-                            onSuccess = {
-                                onNavigateToPending()
-                            },
-                            onError = { error ->
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Registration Error: $error")
+                            authViewModel.saveUserToFirestore(
+                                userData = newUser,
+                                onSuccess = {
+                                    onNavigateToPending()
+                                },
+                                onError = { error ->
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(error)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        } else {
+                            // 2. GET STARTED / CREATE ACCOUNT must call only: FirebaseAuth.createUserWithEmailAndPassword(email.trim(), password)
+                            // 3. Never use Google AuthCredential, stale credentials, ID tokens, or signInWithCredential
+                            // 6. After createUserWithEmailAndPassword succeeds, use FirebaseAuth.currentUser.uid and save the driver profile to users/{uid}
+                            // 7. Do not navigate to Account Under Review unless both Authentication and Firestore profile creation succeed
+                            // 8. Show exact FirebaseAuthException error code on failure
+                            authViewModel.registerWithEmail(
+                                name = name.trim(),
+                                email = email.trim(),
+                                pass = password,
+                                mobile = mobile.trim(),
+                                vehicleType = selectedVehicle ?: "AUTO",
+                                generatedUserId = generatedUserId,
+                                onSuccess = {
+                                    onNavigateToPending()
+                                },
+                                onError = { error ->
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(error)
+                                    }
+                                }
+                            )
+                        }
                     },
                     enabled = canSubmit && uiState !is AuthState.Loading,
                     shape = RoundedCornerShape(12.dp),
