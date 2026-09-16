@@ -1318,22 +1318,6 @@
 
   <!-- ================= JAVASCRIPT & FIREBASE INTEGRATION ================= -->
   <script type="module">
-    /*
-     * ----------------------------------------------------------------------
-     * FIREBASE CONFIGURATION REPLACEMENT:
-     * Replace these fields with your exact Firebase Console Web project config:
-     *
-     * const firebaseConfig = {
-     *   apiKey: "YOUR_API_KEY",
-     *   authDomain: "ridemarter-app.firebaseapp.com",
-     *   projectId: "ridemarter-app",
-     *   storageBucket: "ridemarter-app.appspot.com",
-     *   messagingSenderId: "1234567890",
-     *   appId: "1:1234567890:web:abcdef123456"
-     * };
-     * ----------------------------------------------------------------------
-     */
-
     // Firebase Modular SDK imports via Google Static CDN
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { 
@@ -1357,14 +1341,15 @@
       Timestamp 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Config object with fallback (replace with your Firebase project credentials)
+    // Exact Firebase Web configuration
     const firebaseConfig = {
-      apiKey: "YOUR_FIREBASE_WEB_API_KEY",
+      apiKey: "AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA",
       authDomain: "ridemarter.firebaseapp.com",
       projectId: "ridemarter",
-      storageBucket: "ridemarter.appspot.com",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_FIREBASE_WEB_APP_ID"
+      storageBucket: "ridemarter.firebasestorage.app",
+      messagingSenderId: "440889531345",
+      appId: "1:440889531345:web:ab4e1f45321e44305e5ef0",
+      measurementId: "G-X7136MK8GB"
     };
 
     let app = null;
@@ -1378,7 +1363,7 @@
       db = getFirestore(app);
       isCloudOnline = true;
     } catch (err) {
-      console.warn("Running in local high-fidelity state mode:", err.message);
+      console.error("Firebase initialization failed:", err.message);
     }
 
     // STATE STORE
