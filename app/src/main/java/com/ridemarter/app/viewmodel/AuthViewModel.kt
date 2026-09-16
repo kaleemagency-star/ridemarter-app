@@ -15,9 +15,12 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.ridemarter.app.model.UserData
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -221,13 +224,45 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             try {
+                val db = FirebaseFirestore.getInstance()
+
+                // PREVENT DUPLICATE USERS: Verify email does not already exist in Firestore
+                val existingEmailQuery = db.collection("users")
+                    .whereEqualTo("email", trimmedEmail)
+                    .get()
+                    .await()
+                if (!existingEmailQuery.isEmpty) {
+                    val err = "An account with this email address already exists. Please login instead."
+                    _uiState.value = AuthState.Error(err)
+                    onError(err)
+                    return@launch
+                }
+
+                // PREVENT DUPLICATE USERS: Verify mobile number is unique across all driver accounts
+                val existingMobileQuery = db.collection("users")
+                    .whereEqualTo("mobile", trimmedMobile)
+                    .get()
+                    .await()
+                if (!existingMobileQuery.isEmpty) {
+                    val err = "This mobile number is already registered with another driver account. Please use a unique mobile number or login."
+                    _uiState.value = AuthState.Error(err)
+                    onError(err)
+                    return@launch
+                }
+
                 val authInstance = FirebaseAuth.getInstance()
                 val authResult = authInstance.createUserWithEmailAndPassword(trimmedEmail, pass).await()
                 val currentFirebaseUser = authInstance.currentUser ?: authResult.user
                     ?: throw IllegalStateException("Firebase Authentication failed to return user")
                 val firebaseAuthUid = currentFirebaseUser.uid
 
-                val userId = generatedUserId.ifBlank { "SD" + firebaseAuthUid.take(8).uppercase() }
+                var userId = generatedUserId.ifBlank { "SD" + firebaseAuthUid.take(8).uppercase() }
+                // Ensure unique userId in users collection
+                val existingIdQuery = db.collection("users").whereEqualTo("userId", userId).get().await()
+                if (!existingIdQuery.isEmpty && existingIdQuery.documents.none { it.id == firebaseAuthUid }) {
+                    userId = "SD" + UUID.randomUUID().toString().replace("-", "").take(8).uppercase()
+                }
+
                 val newUser = UserData(
                     uid = firebaseAuthUid,
                     userId = userId,
@@ -240,11 +275,11 @@ class AuthViewModel : ViewModel() {
                     paymentStatus = "none",
                     approved = false,
                     status = "pending",
+                    approvalStatus = "pending",
                     loginType = "email"
                 )
 
                 // Save data in Cloud Firestore at: users/{firebaseAuthUid}
-                val db = FirebaseFirestore.getInstance()
                 val firestoreMap = hashMapOf<String, Any?>(
                     "name" to newUser.name,
                     "email" to newUser.email,
@@ -272,9 +307,19 @@ class AuthViewModel : ViewModel() {
                 _currentUserData.value = newUser
                 _uiState.value = AuthState.UserPending(newUser)
                 onSuccess(newUser)
+            } catch (e: FirebaseAuthUserCollisionException) {
+                Log.w("AuthViewModel", "User collision exception: ${e.message}")
+                val msg = "An account with this email address already exists. Please login instead."
+                _uiState.value = AuthState.Error(msg)
+                onError(msg)
             } catch (e: FirebaseAuthException) {
                 Log.e("AuthViewModel", "Registration FirebaseAuthException [${e.errorCode}]: ${e.message}", e)
-                val msg = "[${e.errorCode}] ${e.localizedMessage ?: e.message ?: "Registration failed"}"
+                val msg = when (e.errorCode) {
+                    "ERROR_EMAIL_ALREADY_IN_USE" -> "An account with this email address already exists. Please login instead."
+                    "ERROR_WEAK_PASSWORD" -> "Password is too weak. Please use at least 6 characters."
+                    "ERROR_INVALID_EMAIL" -> "Please enter a valid email address."
+                    else -> "[${e.errorCode}] ${e.localizedMessage ?: e.message ?: "Registration failed"}"
+                }
                 _uiState.value = AuthState.Error(msg)
                 onError(msg)
             } catch (e: Exception) {
@@ -340,7 +385,37 @@ class AuthViewModel : ViewModel() {
                 }
 
                 val firebaseAuthUid = currentFirebaseUser.uid
-                val userId = if (userData.userId.isNotBlank()) userData.userId else "SD" + firebaseAuthUid.take(8).uppercase()
+                val db = FirebaseFirestore.getInstance()
+
+                // PREVENT DUPLICATE USERS: Verify mobile is not owned by another account
+                val mobileQuery = db.collection("users")
+                    .whereEqualTo("mobile", userData.mobile.trim())
+                    .get()
+                    .await()
+                val duplicateDoc = mobileQuery.documents.firstOrNull { it.id != firebaseAuthUid }
+                if (duplicateDoc != null) {
+                    val err = "This mobile number is already registered with another driver account."
+                    _uiState.value = AuthState.Error(err)
+                    onError(err)
+                    return@launch
+                }
+
+                val existingDoc = db.collection("users").document(firebaseAuthUid).get().await()
+                val existingApproved = existingDoc.getBoolean("approved") ?: false
+                val existingStatus = existingDoc.getString("status") ?: "pending"
+                val existingApprovalStatus = existingDoc.getString("approvalStatus") ?: existingStatus
+                val existingPlanStatus = existingDoc.getString("planStatus") ?: "none"
+                val existingPlanName = existingDoc.getString("planName") ?: "none"
+                val existingPaymentStatus = existingDoc.getString("paymentStatus") ?: "none"
+
+                val isApproved = if (existingDoc.exists()) existingApproved else false
+                val status = if (existingDoc.exists()) existingStatus else "pending"
+                val approvalStatus = if (existingDoc.exists()) existingApprovalStatus else "pending"
+                val planStatus = if (existingDoc.exists()) existingPlanStatus else "none"
+                val planName = if (existingDoc.exists()) existingPlanName else "none"
+                val paymentStatus = if (existingDoc.exists()) existingPaymentStatus else "none"
+
+                val userId = if (userData.userId.isNotBlank()) userData.userId else (existingDoc.getString("userId") ?: ("SD" + firebaseAuthUid.take(8).uppercase()))
 
                 val firestoreMap = hashMapOf<String, Any?>(
                     "name" to userData.name.trim(),
@@ -348,20 +423,18 @@ class AuthViewModel : ViewModel() {
                     "mobile" to userData.mobile.trim(),
                     "vehicleType" to userData.vehicleType,
                     "userId" to userId,
-                    "approvalStatus" to "pending",
-                    "planName" to "none",
-                    "planStatus" to "none",
-                    "paymentStatus" to "none",
-                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "approvalStatus" to approvalStatus,
+                    "planName" to planName,
+                    "planStatus" to planStatus,
+                    "paymentStatus" to paymentStatus,
+                    "createdAt" to (existingDoc.getTimestamp("createdAt") ?: com.google.firebase.firestore.FieldValue.serverTimestamp()),
                     "uid" to firebaseAuthUid,
-                    "approved" to false,
-                    "status" to "pending",
+                    "approved" to isApproved,
+                    "status" to status,
                     "loginType" to userData.loginType.ifEmpty { "google" },
                     "profilePhotoUrl" to (userData.profilePhotoUrl.ifEmpty { currentFirebaseUser.photoUrl?.toString() ?: "" }),
-                    "serviceActive" to false
+                    "serviceActive" to (existingDoc.getBoolean("serviceActive") ?: false)
                 )
-
-                val db = FirebaseFirestore.getInstance()
 
                 // Await the Firestore write result
                 db.collection("users").document(firebaseAuthUid)
@@ -374,16 +447,21 @@ class AuthViewModel : ViewModel() {
                     name = userData.name.trim(),
                     email = userData.email.trim(),
                     mobile = userData.mobile.trim(),
-                    planName = "none",
-                    planStatus = "none",
-                    paymentStatus = "none",
-                    approved = false,
-                    status = "pending"
+                    planName = planName,
+                    planStatus = planStatus,
+                    paymentStatus = paymentStatus,
+                    approved = isApproved,
+                    status = status,
+                    approvalStatus = approvalStatus
                 )
 
-                // Navigate to Account Under Review ONLY after the Firestore write succeeds
+                // Navigate according to approval status
                 _currentUserData.value = finalUser
-                _uiState.value = AuthState.UserPending(finalUser)
+                if (isApproved) {
+                    _uiState.value = AuthState.UserApproved(finalUser)
+                } else {
+                    _uiState.value = AuthState.UserPending(finalUser)
+                }
                 onSuccess()
             } catch (e: FirebaseAuthException) {
                 Log.e("AuthViewModel", "FirebaseAuthException: ${e.message}", e)
@@ -555,7 +633,188 @@ class AuthViewModel : ViewModel() {
         return "SD$clean"
     }
 
+    private var approvalListener: ListenerRegistration? = null
+
+    fun startApprovalStatusListener(uid: String, onStatusUpdated: ((UserData) -> Unit)? = null) {
+        stopApprovalStatusListener()
+        try {
+            val db = FirebaseFirestore.getInstance()
+            approvalListener = db.collection("users").document(uid)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("AuthViewModel", "Approval status listener error: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && snapshot.exists()) {
+                        val approved = snapshot.getBoolean("approved") ?: false
+                        val status = snapshot.getString("status") ?: if (approved) "approved" else "pending"
+                        val approvalStatus = snapshot.getString("approvalStatus") ?: status
+                        val rejectionReason = snapshot.getString("rejectionReason") ?: ""
+                        val planStatus = snapshot.getString("planStatus") ?: "none"
+                        val paymentStatus = snapshot.getString("paymentStatus") ?: "none"
+                        val planName = snapshot.getString("planName") ?: ""
+                        val name = snapshot.getString("name") ?: ""
+                        val email = snapshot.getString("email") ?: ""
+                        val mobile = snapshot.getString("mobile") ?: ""
+                        val vehicleType = snapshot.getString("vehicleType") ?: "AUTO"
+                        val userId = snapshot.getString("userId") ?: ("SD" + uid.take(8).uppercase())
+
+                        val updatedUser = UserData(
+                            uid = uid,
+                            userId = userId,
+                            name = name,
+                            email = email,
+                            mobile = mobile,
+                            vehicleType = vehicleType,
+                            approved = approved,
+                            status = status,
+                            approvalStatus = approvalStatus,
+                            rejectionReason = rejectionReason,
+                            planStatus = planStatus,
+                            planName = planName,
+                            paymentStatus = paymentStatus
+                        )
+                        _currentUserData.value = updatedUser
+                        when {
+                            approved && (planStatus == "active" || paymentStatus == "approved") -> {
+                                _uiState.value = AuthState.UserActive(updatedUser)
+                            }
+                            approved -> {
+                                _uiState.value = AuthState.UserApproved(updatedUser)
+                            }
+                            status == "rejected" -> {
+                                _uiState.value = AuthState.Error("Application rejected: ${rejectionReason.ifBlank { "Please contact support for review." }}")
+                            }
+                            else -> {
+                                _uiState.value = AuthState.UserPending(updatedUser)
+                            }
+                        }
+                        onStatusUpdated?.invoke(updatedUser)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.w("AuthViewModel", "Failed to start approval listener: ${e.message}")
+        }
+    }
+
+    fun stopApprovalStatusListener() {
+        approvalListener?.remove()
+        approvalListener = null
+    }
+
+    // Driver Approval Controls: Admin methods
+    fun fetchAllDrivers(
+        onSuccess: (List<UserData>) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val snapshot = db.collection("users").get().await()
+                val list = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val uid = doc.id
+                        val approved = doc.getBoolean("approved") ?: false
+                        val status = doc.getString("status") ?: if (approved) "approved" else "pending"
+                        val approvalStatus = doc.getString("approvalStatus") ?: status
+                        val rejectionReason = doc.getString("rejectionReason") ?: ""
+                        UserData(
+                            uid = uid,
+                            userId = doc.getString("userId") ?: ("SD" + uid.take(8).uppercase()),
+                            name = doc.getString("name") ?: "",
+                            email = doc.getString("email") ?: "",
+                            mobile = doc.getString("mobile") ?: "",
+                            vehicleType = doc.getString("vehicleType") ?: "AUTO",
+                            approved = approved,
+                            status = status,
+                            approvalStatus = approvalStatus,
+                            rejectionReason = rejectionReason,
+                            planStatus = doc.getString("planStatus") ?: "none",
+                            planName = doc.getString("planName") ?: "",
+                            paymentStatus = doc.getString("paymentStatus") ?: "none",
+                            createdAt = doc.getTimestamp("createdAt")
+                        )
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                onSuccess(list)
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error fetching drivers list: ${e.message}", e)
+                onError(e.localizedMessage ?: "Failed to fetch drivers")
+            }
+        }
+    }
+
+    fun updateDriverApproval(
+        driverUid: String,
+        approved: Boolean,
+        status: String,
+        rejectionReason: String = "",
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val updates = hashMapOf<String, Any?>(
+                    "approved" to approved,
+                    "status" to status,
+                    "approvalStatus" to status,
+                    "rejectionReason" to rejectionReason,
+                    "reviewedAt" to FieldValue.serverTimestamp()
+                )
+                db.collection("users").document(driverUid)
+                    .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+
+                // If currently logged-in user is this driver, immediately update local state
+                if (_currentUserData.value?.uid == driverUid) {
+                    val curr = _currentUserData.value
+                    if (curr != null) {
+                        val updated = curr.copy(
+                            approved = approved,
+                            status = status,
+                            approvalStatus = status,
+                            rejectionReason = rejectionReason
+                        )
+                        _currentUserData.value = updated
+                        if (approved) {
+                            _uiState.value = AuthState.UserApproved(updated)
+                        } else if (status == "rejected") {
+                            _uiState.value = AuthState.Error("Application rejected: ${rejectionReason.ifBlank { "Please contact support." }}")
+                        } else {
+                            _uiState.value = AuthState.UserPending(updated)
+                        }
+                    }
+                }
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Failed to update driver approval: ${e.message}", e)
+                onError(e.localizedMessage ?: "Failed to update driver status")
+            }
+        }
+    }
+
+    fun deleteDriverRecord(
+        driverUid: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                db.collection("users").document(driverUid).delete().await()
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Failed to delete driver record: ${e.message}", e)
+                onError(e.localizedMessage ?: "Failed to delete driver record")
+            }
+        }
+    }
+
     fun signOut() {
+        stopApprovalStatusListener()
         try {
             auth?.signOut()
         } catch (e: Exception) {
@@ -568,5 +827,10 @@ class AuthViewModel : ViewModel() {
 
     fun clearState() {
         _uiState.value = AuthState.Idle
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopApprovalStatusListener()
     }
 }

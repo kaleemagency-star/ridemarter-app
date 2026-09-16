@@ -21,7 +21,11 @@ data class UserData(
     val createdAt: Timestamp? = null,
     val loginType: String = "google",
     val profilePhotoUrl: String = "",
-    val serviceActive: Boolean = false
+    val serviceActive: Boolean = false,
+    val approvalStatus: String = "pending",
+    val rejectionReason: String = "",
+    val reviewedAt: Timestamp? = null,
+    val role: String = "driver"
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "uid" to uid,
@@ -33,6 +37,10 @@ data class UserData(
         "vehicleType" to vehicleType,
         "approved" to approved,
         "status" to status,
+        "approvalStatus" to approvalStatus,
+        "rejectionReason" to rejectionReason,
+        "reviewedAt" to reviewedAt,
+        "role" to role,
         "planStatus" to planStatus,
         "planName" to planName,
         "paymentStatus" to paymentStatus,
@@ -51,6 +59,9 @@ data class UserData(
         "vehicleType" to vehicleType,
         "userId" to userId,
         "approvalStatus" to "pending",
+        "rejectionReason" to "",
+        "reviewedAt" to null,
+        "role" to role,
         "planName" to planName.ifEmpty { "none" },
         "planStatus" to "none",
         "paymentStatus" to "none",

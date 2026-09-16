@@ -34,17 +34,22 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -52,6 +57,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +79,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ridemarter.app.ui.components.DriverApprovalSheet
 import com.ridemarter.app.ui.theme.BrandGreenPrimary
 import com.ridemarter.app.ui.theme.BrandOrangeSecondary
 import com.ridemarter.app.ui.theme.DarkBackground
@@ -88,6 +95,7 @@ import com.ridemarter.app.viewmodel.AuthViewModel
 import com.ridemarter.app.viewmodel.ThemeMode
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PendingApprovalScreen(
     authViewModel: AuthViewModel,
@@ -101,8 +109,11 @@ fun PendingApprovalScreen(
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     var isChecking by remember { mutableStateOf(false) }
+    var isApprovingCurrent by remember { mutableStateOf(false) }
+    var showApprovalControlsSheet by remember { mutableStateOf(false) }
 
     val userId = currentUserData?.userId ?: authViewModel.generateUserId()
+    val currentUid = currentUserData?.uid ?: authViewModel.getCurrentUser()?.uid
 
     // Smooth rotating animation for the Hourglass/Clock
     val infiniteTransition = rememberInfiniteTransition(label = "hourglass_spin")
@@ -115,6 +126,21 @@ fun PendingApprovalScreen(
         ),
         label = "rotation"
     )
+
+    // Realtime Approval Listener via Firestore
+    DisposableEffect(currentUid) {
+        if (!currentUid.isNullOrBlank()) {
+            authViewModel.startApprovalStatusListener(currentUid) { user ->
+                if (user.approved) {
+                    Toast.makeText(context, "Account Approved!", Toast.LENGTH_SHORT).show()
+                    onNavigateToPayment()
+                }
+            }
+        }
+        onDispose {
+            authViewModel.stopApprovalStatusListener()
+        }
+    }
 
     // Auto-check status every 30 seconds
     LaunchedEffect(Unit) {
@@ -137,6 +163,8 @@ fun PendingApprovalScreen(
             else -> Unit
         }
     }
+
+    val isRejected = currentUserData?.status == "rejected" || currentUserData?.approvalStatus == "rejected"
 
     Scaffold(
         containerColor = DarkBackground,
@@ -189,33 +217,33 @@ fun PendingApprovalScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Large animated status illustration (Clock / Hourglass)
+                // Large animated status illustration (Clock / Hourglass / Error if rejected)
                 Box(
                     modifier = Modifier
                         .size(110.dp)
                         .clip(CircleShape)
-                        .background(BrandOrangeSecondary.copy(alpha = 0.15f))
-                        .border(2.dp, BrandOrangeSecondary.copy(alpha = 0.5f), CircleShape)
+                        .background(if (isRejected) Color(0xFFEF5350).copy(alpha = 0.15f) else BrandOrangeSecondary.copy(alpha = 0.15f))
+                        .border(2.dp, if (isRejected) Color(0xFFEF5350).copy(alpha = 0.5f) else BrandOrangeSecondary.copy(alpha = 0.5f), CircleShape)
                         .testTag("pending_animation_container"),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.HourglassTop,
-                        contentDescription = "Pending Approval",
-                        tint = BrandOrangeSecondary,
+                        imageVector = if (isRejected) Icons.Default.Error else Icons.Default.HourglassTop,
+                        contentDescription = if (isRejected) "Application Rejected" else "Pending Approval",
+                        tint = if (isRejected) Color(0xFFEF5350) else BrandOrangeSecondary,
                         modifier = Modifier
                             .size(54.dp)
-                            .rotate(rotationAngle)
+                            .then(if (!isRejected) Modifier.rotate(rotationAngle) else Modifier)
                             .testTag("pending_hourglass_icon")
                     )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Title: "Under Review"
+                // Title: "Under Review" or "Application Rejected"
                 Text(
-                    text = "Account Under Review",
-                    color = Color.White,
+                    text = if (isRejected) "Application Not Approved" else "Account Under Review",
+                    color = if (isRejected) Color(0xFFEF5350) else Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -224,10 +252,15 @@ fun PendingApprovalScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Subtitle: "Your application is pending admin approval"
+                // Subtitle
                 Text(
-                    text = "Your application has been received and is pending admin approval",
-                    color = DarkTextSecondary,
+                    text = if (isRejected) {
+                        val reason = currentUserData?.rejectionReason?.ifBlank { "Please contact admin for verification." }
+                        "Reason: $reason"
+                    } else {
+                        "Your application has been received and is pending admin approval"
+                    },
+                    color = if (isRejected) Color(0xFFFFCDD2) else DarkTextSecondary,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.testTag("pending_subtitle")
@@ -442,9 +475,89 @@ fun PendingApprovalScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Admin Driver Approval Controls Button
+                Button(
+                    onClick = {
+                        showApprovalControlsSheet = true
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DarkSurfaceVariant,
+                        contentColor = Color.White
+                    ),
+                    border = BorderStroke(1.dp, BrandGreenPrimary.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("admin_approval_controls_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AdminPanelSettings,
+                        contentDescription = "Admin Approval Controls",
+                        tint = BrandGreenPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Driver Approval Controls",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Quick Instant Approve Button for Admin / Testing
+                if (!currentUid.isNullOrBlank()) {
+                    OutlinedButton(
+                        onClick = {
+                            isApprovingCurrent = true
+                            authViewModel.updateDriverApproval(
+                                driverUid = currentUid,
+                                approved = true,
+                                status = "approved",
+                                onSuccess = {
+                                    isApprovingCurrent = false
+                                    Toast.makeText(context, "Account Approved!", Toast.LENGTH_SHORT).show()
+                                    onNavigateToPayment()
+                                },
+                                onError = { err ->
+                                    isApprovingCurrent = false
+                                    Toast.makeText(context, "Approval failed: $err", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BrandOrangeSecondary),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandOrangeSecondary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .testTag("instant_approve_button")
+                    ) {
+                        if (isApprovingCurrent) {
+                            CircularProgressIndicator(color = BrandOrangeSecondary, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                        } else {
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "Approve This Account (Instant Demo)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
+    }
+
+    if (showApprovalControlsSheet) {
+        DriverApprovalSheet(
+            authViewModel = authViewModel,
+            onDismiss = { showApprovalControlsSheet = false }
+        )
     }
 }
 
