@@ -14,6 +14,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
 import com.smartdrivo.app.navigation.AppNavigation
 import com.smartdrivo.app.ui.theme.SmartDrivoTheme
 import com.smartdrivo.app.viewmodel.ThemeMode
@@ -29,12 +30,34 @@ open class MainActivity : ComponentActivity() {
         // Safe Firebase initialization
         try {
             if (FirebaseApp.getApps(this).isEmpty()) {
-                FirebaseApp.initializeApp(this)
+                val app = FirebaseApp.initializeApp(this)
+                if (app == null) {
+                    val options = FirebaseOptions.Builder()
+                        .setApiKey("AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA")
+                        .setApplicationId("1:440889531345:android:comsmartdrivoapp4408")
+                        .setProjectId("ridemarter")
+                        .setStorageBucket("ridemarter.firebasestorage.app")
+                        .setGcmSenderId("440889531345")
+                        .build()
+                    FirebaseApp.initializeApp(this, options)
+                }
             }
             Log.d("SmartDrivo", "Firebase initialized successfully")
         } catch (e: Exception) {
-            Log.w("SmartDrivo", "Firebase init skipped: ${e.message}")
-            // App continues without Firebase in preview/test mode
+            Log.w("SmartDrivo", "Firebase default init failed: ${e.message}, trying explicit options")
+            try {
+                val options = FirebaseOptions.Builder()
+                    .setApiKey("AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA")
+                    .setApplicationId("1:440889531345:android:comsmartdrivoapp4408")
+                    .setProjectId("ridemarter")
+                    .setStorageBucket("ridemarter.firebasestorage.app")
+                    .setGcmSenderId("440889531345")
+                    .build()
+                FirebaseApp.initializeApp(this, options)
+                Log.d("SmartDrivo", "Firebase initialized with explicit options")
+            } catch (e2: Exception) {
+                Log.e("SmartDrivo", "Firebase initialization failed: ${e2.message}")
+            }
         }
 
         setContent {

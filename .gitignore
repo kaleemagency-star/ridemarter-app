@@ -1,6 +1,5 @@
 # Sensitive files - never push these
-google-services.json
-app/google-services.json
+!app/google-services.json
 *.jks
 *.keystore
 debug.keystore

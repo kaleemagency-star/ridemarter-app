@@ -1,6 +1,7 @@
 package com.smartdrivo.app.model
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 
 data class UserData(
     val uid: String = "",
@@ -14,6 +15,7 @@ data class UserData(
     val status: String = "pending",
     val planStatus: String = "none",
     val planName: String = "",
+    val paymentStatus: String = "none",
     val planExpiry: Timestamp? = null,
     val planActivatedAt: Timestamp? = null,
     val createdAt: Timestamp? = null,
@@ -33,9 +35,29 @@ data class UserData(
         "status" to status,
         "planStatus" to planStatus,
         "planName" to planName,
+        "paymentStatus" to paymentStatus,
         "planExpiry" to planExpiry,
         "planActivatedAt" to planActivatedAt,
         "createdAt" to (createdAt ?: Timestamp.now()),
+        "loginType" to loginType,
+        "profilePhotoUrl" to profilePhotoUrl,
+        "serviceActive" to serviceActive
+    )
+
+    fun toFirestoreRegistrationMap(): Map<String, Any?> = mapOf(
+        "name" to name,
+        "email" to email,
+        "mobile" to mobile,
+        "vehicleType" to vehicleType,
+        "userId" to userId,
+        "approvalStatus" to "pending",
+        "planName" to planName.ifEmpty { "none" },
+        "planStatus" to "none",
+        "paymentStatus" to "none",
+        "createdAt" to FieldValue.serverTimestamp(),
+        "uid" to uid,
+        "approved" to approved,
+        "status" to status,
         "loginType" to loginType,
         "profilePhotoUrl" to profilePhotoUrl,
         "serviceActive" to serviceActive

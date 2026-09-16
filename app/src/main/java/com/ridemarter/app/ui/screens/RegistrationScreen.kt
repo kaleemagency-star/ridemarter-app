@@ -1,6 +1,7 @@
 package com.ridemarter.app.ui.screens
 
 import android.widget.Toast
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ElectricRickshaw
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.TwoWheeler
@@ -54,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,6 +101,7 @@ fun RegistrationScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
     val googleProfile by authViewModel.googleProfile.collectAsStateWithLifecycle()
@@ -500,6 +504,39 @@ fun RegistrationScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Inline Error Banner if submission fails
+                if (uiState is AuthState.Error) {
+                    val errorMsg = (uiState as AuthState.Error).message
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFB00020).copy(alpha = 0.15f)),
+                        border = BorderStroke(1.dp, Color(0xFFB00020)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                            .testTag("register_error_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ErrorOutline,
+                                contentDescription = "Registration Error",
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = errorMsg,
+                                color = Color(0xFFFF8A80),
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+
                 // SUBMIT BUTTON "Create Account"
                 Button(
                     onClick = {
@@ -517,14 +554,24 @@ fun RegistrationScreen(
                             approved = false,
                             status = "pending",
                             planStatus = "none",
+                            paymentStatus = "none",
+                            planName = "none",
                             createdAt = Timestamp.now(),
                             loginType = if (isGoogleUser) "google" else "email",
                             profilePhotoUrl = photoUrl
                         )
 
-                        authViewModel.saveUserToFirestore(newUser) {
-                            onNavigateToPending()
-                        }
+                        authViewModel.saveUserToFirestore(
+                            userData = newUser,
+                            onSuccess = {
+                                onNavigateToPending()
+                            },
+                            onError = { error ->
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Registration Error: $error")
+                                }
+                            }
+                        )
                     },
                     enabled = canSubmit && uiState !is AuthState.Loading,
                     shape = RoundedCornerShape(12.dp),

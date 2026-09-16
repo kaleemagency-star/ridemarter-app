@@ -1,26 +1,74 @@
 {
   "project_info": {
-    "project_number": "900885102321",
+    "project_number": "440889531345",
     "project_id": "ridemarter",
-    "storage_bucket": "ridemarter.appspot.com"
+    "storage_bucket": "ridemarter.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:900885102321:android:abcdef1234567890",
+        "mobilesdk_app_id": "1:440889531345:android:comridemarterapp4408",
         "android_client_info": {
           "package_name": "com.ridemarter.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "900885102321-exampleoauthclientid.apps.googleusercontent.com",
+          "client_id": "440889531345-androidclient.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDummyKey_ReplaceWithYourActualApiKey"
+          "current_key": "AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:440889531345:android:comsmartdrivoapp4408",
+        "android_client_info": {
+          "package_name": "com.smartdrivo.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "440889531345-androidclient.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:440889531345:android:comexampleapp4408",
+        "android_client_info": {
+          "package_name": "com.example"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "440889531345-androidclient.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA"
         }
       ],
       "services": {

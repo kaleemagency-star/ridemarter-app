@@ -111,7 +111,7 @@ class AuthViewModel : ViewModel() {
                 val credentialManager = CredentialManager.create(context)
                 val googleIdOption = GetGoogleIdOption.Builder()
                     .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId("900885102321-demo.apps.googleusercontent.com")
+                    .setServerClientId("440889531345-androidclient.apps.googleusercontent.com")
                     .setAutoSelectEnabled(false)
                     .build()
 
@@ -132,39 +132,29 @@ class AuthViewModel : ViewModel() {
                     val email = googleIdTokenCredential.id
 
                     val authCredential = GoogleAuthProvider.getCredential(idToken, null)
-                    val authInstance = auth
-                    if (authInstance != null) {
-                        val authResult = authInstance.signInWithCredential(authCredential).await()
-                        val user = authResult.user
+                    val authInstance = auth ?: FirebaseAuth.getInstance()
+                    val authResult = authInstance.signInWithCredential(authCredential).await()
+                    val user = authResult.user
 
-                        if (user != null) {
-                            val resolvedName = displayName.ifEmpty { user.displayName ?: "" }
-                            val resolvedEmail = email.ifEmpty { user.email ?: "" }
-                            _googleProfile.value = Pair(resolvedName, resolvedEmail)
-                            handlePostLoginCheck(user.uid, onRequireRegistration)
-                        } else {
-                            _uiState.value = AuthState.Error("Google sign-in returned empty user")
-                        }
+                    if (user != null) {
+                        val resolvedName = displayName.ifEmpty { user.displayName ?: "" }
+                        val resolvedEmail = email.ifEmpty { user.email ?: "" }
+                        _googleProfile.value = Pair(resolvedName, resolvedEmail)
+                        handlePostLoginCheck(user.uid, onRequireRegistration)
                     } else {
-                        onRequireRegistration?.invoke(displayName, email)
+                        _uiState.value = AuthState.Error("Google sign-in returned empty user")
                     }
                 } else {
                     _uiState.value = AuthState.Error("Unsupported credential received")
                 }
             } catch (e: GetCredentialException) {
                 Log.w("AuthViewModel", "CredentialManager exception: ${e.message}")
-                val devName = ""
-                val devEmail = ""
-                _googleProfile.value = Pair(devName, devEmail)
-                _uiState.value = AuthState.Success("Google Sign-In ready")
-                onRequireRegistration?.invoke(devName, devEmail)
+                val errMsg = e.localizedMessage ?: "Google Sign-In cancelled or failed"
+                _uiState.value = AuthState.Error(errMsg)
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Google Sign-In failed", e)
-                val devName = ""
-                val devEmail = ""
-                _googleProfile.value = Pair(devName, devEmail)
-                _uiState.value = AuthState.Success("Google Sign-In ready")
-                onRequireRegistration?.invoke(devName, devEmail)
+                val errMsg = e.localizedMessage ?: e.message ?: "Google Sign-In failed"
+                _uiState.value = AuthState.Error(errMsg)
             }
         }
     }
@@ -239,39 +229,96 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun saveUserToFirestore(userData: UserData, onComplete: () -> Unit = {}) {
+    fun saveUserToFirestore(
+        userData: UserData,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
-            val targetUid = if (userData.uid.isNotBlank()) {
-                userData.uid
-            } else {
-                (try { auth?.currentUser?.uid } catch (e: Exception) { null } ?: UUID.randomUUID().toString())
-            }
-            val finalUser = userData.copy(
-                uid = targetUid,
-                userId = if (userData.userId.isNotBlank()) userData.userId else "SD" + targetUid.take(8).uppercase()
-            )
-
-            if (!isFirebaseAvailable()) {
-                _currentUserData.value = finalUser
-                _uiState.value = AuthState.UserPending(finalUser)
-                onComplete()
-                return@launch
-            }
-
             try {
-                val db = firestore
-                if (db != null) {
-                    db.collection("users").document(targetUid).set(finalUser.toMap()).await()
+                // 1. Confirm FirebaseAuth.currentUser is not null before registration
+                val authInstance = auth ?: try { FirebaseAuth.getInstance() } catch (e: Exception) { null }
+                if (authInstance == null) {
+                    throw IllegalStateException("Firebase Authentication service is unavailable.")
                 }
+
+                var currentFirebaseUser = authInstance.currentUser
+
+                // Fallback attempt to sign in anonymously if no authenticated session exists
+                if (currentFirebaseUser == null) {
+                    try {
+                        val authResult = authInstance.signInAnonymously().await()
+                        currentFirebaseUser = authResult.user
+                    } catch (e: Exception) {
+                        Log.w("AuthViewModel", "Anonymous auth fallback: ${e.message}")
+                    }
+                }
+
+                if (currentFirebaseUser == null) {
+                    throw IllegalStateException("FirebaseAuth.currentUser is null. Authentication is required before registration.")
+                }
+
+                val firebaseAuthUid = currentFirebaseUser.uid
+                val userId = if (userData.userId.isNotBlank()) userData.userId else "SD" + firebaseAuthUid.take(8).uppercase()
+
+                // 2. Save the profile exactly to: users/{FirebaseAuth.currentUser.uid}
+                // 3. Include:
+                //    name, email, mobile, vehicleType,
+                //    userId, approvalStatus: "pending",
+                //    planName: "none", planStatus: "none",
+                //    paymentStatus: "none",
+                //    createdAt: FieldValue.serverTimestamp()
+                val firestoreMap = hashMapOf<String, Any?>(
+                    "name" to userData.name.trim(),
+                    "email" to userData.email.trim(),
+                    "mobile" to userData.mobile.trim(),
+                    "vehicleType" to userData.vehicleType,
+                    "userId" to userId,
+                    "approvalStatus" to "pending",
+                    "planName" to "none",
+                    "planStatus" to "none",
+                    "paymentStatus" to "none",
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "uid" to firebaseAuthUid,
+                    "approved" to false,
+                    "status" to "pending",
+                    "loginType" to userData.loginType.ifEmpty { "email" },
+                    "profilePhotoUrl" to (userData.profilePhotoUrl.ifEmpty { currentFirebaseUser.photoUrl?.toString() ?: "" }),
+                    "serviceActive" to false
+                )
+
+                val db = firestore ?: FirebaseFirestore.getInstance()
+
+                // 4. Await the Firestore write result
+                db.collection("users").document(firebaseAuthUid)
+                    .set(firestoreMap, com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+
+                val finalUser = userData.copy(
+                    uid = firebaseAuthUid,
+                    userId = userId,
+                    name = userData.name.trim(),
+                    email = userData.email.trim(),
+                    mobile = userData.mobile.trim(),
+                    planName = "none",
+                    planStatus = "none",
+                    paymentStatus = "none",
+                    approved = false,
+                    status = "pending"
+                )
+
+                // 5. Navigate to Account Under Review ONLY after the Firestore write succeeds
                 _currentUserData.value = finalUser
                 _uiState.value = AuthState.UserPending(finalUser)
-                onComplete()
+                onSuccess()
             } catch (e: Exception) {
-                Log.w("AuthViewModel", "Firestore save error: ${e.message}")
-                _currentUserData.value = finalUser
-                _uiState.value = AuthState.UserPending(finalUser)
-                onComplete()
+                // 6. If the write fails, remain on registration and show the exact Firebase error
+                // 7. Do not show a false success/pending screen
+                Log.e("AuthViewModel", "Firestore registration failed: ${e.message}", e)
+                val errorMessage = e.localizedMessage ?: e.message ?: "Registration failed in Firebase"
+                _uiState.value = AuthState.Error(errorMessage)
+                onError(errorMessage)
             }
         }
     }
