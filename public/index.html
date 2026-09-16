@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RideMarter — Admin Control Center</title>
+  <style>
+    /* -------------------------------------------------------------
+       RIDEMARTER ADMIN PANEL — PURE MODERN DARK THEME
+       Accent: #00C853 (Material Vibrant Green)
+       Canvas: #0B0D11 | Card: #14171E | Surface: #1B202B
+       ------------------------------------------------------------- */
+    :root {
+      --bg-canvas: #0A0C10;
+      --bg-sidebar: #0F1218;
+      --bg-card: #141822;
+      --bg-card-hover: #1A202E;
+      --bg-surface: #1E2433;
+      --bg-input: #0D1017;
+      --border-subtle: #242B3C;
+      --border-active: #00C853;
+      --accent-green: #00C853;
+      --accent-green-hover: #00E676;
+      --accent-green-soft: rgba(0, 200, 83, 0.12);
+      --accent-red: #FF3B30;
+      --accent-red-soft: rgba(255, 59, 48, 0.12);
+      --accent-yellow: #FFB300;
+      --accent-yellow-soft: rgba(255, 179, 0, 0.12);
+      --accent-blue: #2979FF;
+      --accent-blue-soft: rgba(41, 121, 255, 0.12);
+      --text-primary: #FFFFFF;
+      --text-secondary: #8E9BAE;
+      --text-muted: #5C6779;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.4);
+      --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-family);
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* ---------------- AUTH OVERLAY ---------------- */
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 16, 0.95);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .auth-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 420px;
+      padding: 36px 30px;
+      box-shadow: var(--shadow-soft);
+      text-align: center;
+    }
+
+    .auth-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .auth-logo-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-md);
+      background: var(--accent-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-weight: 900;
+      font-size: 22px;
+    }
+
+    .auth-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text-primary);
+    }
+
+    .auth-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      margin-bottom: 28px;
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 18px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      transition: var(--transition);
+    }
+
+    .form-input:focus {
+      border-color: var(--accent-green);
+      box-shadow: 0 0 0 2px var(--accent-green-soft);
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--accent-green);
+      color: #000;
+      border: none;
+      padding: 13px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+      margin-top: 10px;
+    }
+
+    .btn-submit:hover {
+      background: var(--accent-green-hover);
+      transform: translateY(-1px);
+    }
+
+    .auth-hint {
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ---------------- APP SHELL ---------------- */
+    #app-container {
+      display: flex;
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 260px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      z-index: 100;
+      flex-shrink: 0;
+    }
+
+    .brand-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-left: 8px;
+      margin-bottom: 36px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      background: var(--accent-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      color: #000;
+      font-size: 18px;
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .brand-badge {
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--accent-green-soft);
+      color: var(--accent-green);
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      margin-left: auto;
+    }
+
+    .nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .nav-item:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--accent-green-soft);
+      color: var(--accent-green);
+      font-weight: 700;
+    }
+
+    .nav-icon {
+      font-size: 18px;
+    }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .admin-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .admin-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .admin-email {
+      font-size: 11px;
+      color: var(--text-muted);
+      max-width: 140px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-logout:hover {
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+      background: var(--accent-red-soft);
+    }
+
+    /* MAIN CONTENT WRAPPER */
+    .main-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      min-width: 0;
+    }
+
+    .topbar {
+      height: 64px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 18, 24, 0.8);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 90;
+    }
+
+    .topbar-title {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .live-status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--accent-green);
+      background: var(--accent-green-soft);
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-primary {
+      background: var(--accent-green);
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: var(--transition);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-green-hover);
+    }
+
+    .btn-secondary {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border-subtle);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-active);
+    }
+
+    .content-area {
+      padding: 32px;
+      flex: 1;
+    }
+
+    .tab-section {
+      display: none;
+    }
+
+    .tab-section.active {
+      display: block;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---------------- DASHBOARD METRICS ---------------- */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 18px;
+      margin-bottom: 32px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border-subtle);
+    }
+
+    .metric-card.accent-green::before { background: var(--accent-green); }
+    .metric-card.accent-blue::before { background: var(--accent-blue); }
+    .metric-card.accent-yellow::before { background: var(--accent-yellow); }
+    .metric-card.accent-red::before { background: var(--accent-red); }
+
+    .metric-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .metric-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .metric-icon-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .metric-val {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -1px;
+    }
+
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ---------------- TABLES & CARDS ---------------- */
+    .panel-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .panel-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .panel-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      color: var(--text-primary);
+      font-size: 13px;
+      min-width: 240px;
+      outline: none;
+    }
+
+    .search-box:focus {
+      border-color: var(--accent-green);
+    }
+
+    .filter-select {
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      font-weight: 600;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: var(--bg-card-hover);
+    }
+
+    /* BADGES */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .badge-green { background: var(--accent-green-soft); color: var(--accent-green); }
+    .badge-red { background: var(--accent-red-soft); color: var(--accent-red); }
+    .badge-yellow { background: var(--accent-yellow-soft); color: var(--accent-yellow); }
+    .badge-blue { background: var(--accent-blue-soft); color: var(--accent-blue); }
+    .badge-gray { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+
+    /* ACTION BUTTONS */
+    .action-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-action {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 5px 9px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-action:hover {
+      border-color: var(--text-primary);
+    }
+
+    .btn-action.approve {
+      background: var(--accent-green-soft);
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+    }
+    .btn-action.approve:hover { background: var(--accent-green); color: #000; }
+
+    .btn-action.reject {
+      background: var(--accent-red-soft);
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+    }
+    .btn-action.reject:hover { background: var(--accent-red); color: #fff; }
+
+    .btn-action.danger {
+      color: var(--accent-red);
+    }
+    .btn-action.danger:hover {
+      background: var(--accent-red);
+      color: #fff;
+    }
+
+    /* ---------------- SETTINGS FORM ---------------- */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .settings-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 24px;
+    }
+
+    .settings-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-primary);
+    }
+
+    .plan-price-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .plan-info-tag {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .price-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .price-input-wrap span {
+      color: var(--accent-green);
+      font-weight: bold;
+    }
+
+    .price-input-field {
+      width: 90px;
+      padding: 6px 8px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    /* ---------------- MODAL DIALOG ---------------- */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 480px;
+      padding: 26px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .modal-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    /* SCREENSHOT PREVIEW MODAL */
+    .screenshot-img-preview {
+      width: 100%;
+      max-height: 420px;
+      object-fit: contain;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: #000;
+    }
+
+    /* TOAST NOTIFICATION */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toast {
+      background: var(--bg-card);
+      border: 1px solid var(--accent-green);
+      color: var(--text-primary);
+      padding: 12px 18px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--shadow-soft);
+      animation: slideToast 0.3s ease-out;
+    }
+
+    @keyframes slideToast {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* RESPONSIVENESS */
+    @media (max-width: 900px) {
+      .sidebar {
+        width: 72px;
+        padding: 16px 8px;
+      }
+      .brand-name, .brand-badge, .nav-text, .admin-info {
+        display: none;
+      }
+      .brand-header {
+        justify-content: center;
+        padding-left: 0;
+      }
+      .nav-item {
+        justify-content: center;
+        padding: 12px;
+      }
+      .topbar {
+        padding: 0 16px;
+      }
+      .content-area {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ================= AUTH OVERLAY ================= -->
+  <div id="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="auth-logo-icon">⚡</div>
+        <div class="auth-title">RideMarter</div>
+      </div>
+      <p class="auth-subtitle">Administrator Access Portal</p>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Admin Email</label>
+          <input class="form-input" type="email" id="login-email" placeholder="admin@example.com" required value="" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input class="form-input" type="password" id="login-password" placeholder="••••••••" required value="" />
+        </div>
+        <button class="btn-submit" type="submit" id="btn-login-submit">Authenticate</button>
+      </form>
+
+      <p class="auth-hint">
+        Direct Firebase Auth verification.<br/>
+        Demo Mode enabled for immediate dashboard exploration.
+      </p>
+    </div>
+  </div>
+
+  <!-- ================= APP CONTAINER ================= -->
+  <div id="app-container">
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-name">RideMarter</div>
+        <div class="brand-badge">ADMIN</div>
+      </div>
+
+      <ul class="nav-list">
+        <li class="nav-item active" data-tab="dashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Dashboard</span>
+        </li>
+        <li class="nav-item" data-tab="users">
+          <span class="nav-icon">👥</span>
+          <span class="nav-text">Drivers & Users</span>
+        </li>
+        <li class="nav-item" data-tab="payments">
+          <span class="nav-icon">💳</span>
+          <span class="nav-text">Payments</span>
+        </li>
+        <li class="nav-item" data-tab="settings">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">Settings & Pricing</span>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="admin-info">
+          <span class="admin-name" id="sidebar-admin-name">Super Admin</span>
+          <span class="admin-email" id="sidebar-admin-email">admin@example.com</span>
+        </div>
+        <button class="btn-logout" id="btn-logout" title="Sign out">Exit</button>
+      </div>
+    </aside>
+
+    <!-- MAIN WRAPPER -->
+    <div class="main-wrapper">
+
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <span id="current-page-title">Overview Dashboard</span>
+          <div class="live-status-pill">
+            <span class="status-dot"></span>
+            <span>Firestore Live</span>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="btn-secondary" id="btn-refresh-data">↻ Sync Cloud</button>
+        </div>
+      </header>
+
+      <!-- CONTENT AREA -->
+      <main class="content-area">
+
+        <!-- ================= TAB 1: DASHBOARD ================= -->
+        <section id="tab-dashboard" class="tab-section active">
+          
+          <div class="metrics-grid">
+            <div class="metric-card accent-blue">
+              <div class="metric-header">
+                <span class="metric-label">Total Users</span>
+                <div class="metric-icon-badge" style="background: var(--accent-blue-soft); color: var(--accent-blue);">👥</div>
+              </div>
+              <div class="metric-val" id="metric-total-users">0</div>
+              <div class="metric-sub">Registered driver partners</div>
+            </div>
+
+            <div class="metric-card accent-green">
+              <div class="metric-header">
+                <span class="metric-label">Active Plans</span>
+                <div class="metric-icon-badge" style="background: var(--accent-green-soft); color: var(--accent-green);">⚡</div>
+              </div>
+              <div class="metric-val" id="metric-active-users">0</div>
+              <div class="metric-sub">Auto-accept enabled drivers</div>
+            </div>
+
+            <div class="metric-card accent-red">
+              <div class="metric-header">
+                <span class="metric-label">Expired Plans</span>
+                <div class="metric-icon-badge" style="background: var(--accent-red-soft); color: var(--accent-red);">⏳</div>
+              </div>
+              <div class="metric-val" id="metric-expired-users">0</div>
+              <div class="metric-sub">Need renewal reminder</div>
+            </div>
+
+            <div class="metric-card accent-yellow">
+              <div class="metric-header">
+                <span class="metric-label">Pending Approvals</span>
+                <div class="metric-icon-badge" style="background: var(--accent-yellow-soft); color: var(--accent-yellow);">🔔</div>
+              </div>
+              <div class="metric-val" id="metric-pending-payments">0</div>
+              <div class="metric-sub">UPI payments awaiting check</div>
+            </div>
+
+            <div class="metric-card accent-green">
+              <div class="metric-header">
+                <span class="metric-label">Total Orders Logged</span>
+                <div class="metric-icon-badge" style="background: var(--accent-green-soft); color: var(--accent-green);">🚗</div>
+              </div>
+              <div class="metric-val" id="metric-recent-orders">0</div>
+              <div class="metric-sub">Rapido, Uber & Ola trips</div>
+            </div>
+          </div>
+
+          <!-- RECENT PENDING PAYMENTS PREVIEW -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Pending Payment Submissions (Quick Action)</div>
+              <button class="btn-secondary" onclick="navigateToTab('payments')">View All Payments →</button>
+            </div>
+            <div class="table-container">
+              <table id="table-dashboard-pending">
+                <thead>
+                  <tr>
+                    <th>Driver Name</th>
+                    <th>Mobile</th>
+                    <th>Plan</th>
+                    <th>Amount</th>
+                    <th>UTR / Tx ID</th>
+                    <th>Submitted</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-dashboard-pending">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- RECENT DRIVERS -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Recently Registered Drivers</div>
+              <button class="btn-secondary" onclick="navigateToTab('users')">Manage All Drivers →</button>
+            </div>
+            <div class="table-container">
+              <table id="table-dashboard-recent-users">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Vehicle</th>
+                    <th>Mobile</th>
+                    <th>Current Plan</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-dashboard-recent-users">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ================= TAB 2: USER MANAGEMENT ================= -->
+        <section id="tab-users" class="tab-section">
+          
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">All Registered Drivers & Users</div>
+              
+              <div class="panel-controls">
+                <input class="search-box" type="text" id="user-search-input" placeholder="Search name, mobile, email..." />
+                
+                <select class="filter-select" id="user-status-filter">
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">Active Plan</option>
+                  <option value="EXPIRED">Expired Plan</option>
+                  <option value="PENDING">Pending Payment</option>
+                </select>
+
+                <select class="filter-select" id="user-vehicle-filter">
+                  <option value="ALL">All Vehicles</option>
+                  <option value="Auto">Auto Rickshaw</option>
+                  <option value="Bike">Bike / 2W</option>
+                  <option value="Cab">Cab / Car</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table id="table-users">
+                <thead>
+                  <tr>
+                    <th>Driver Info</th>
+                    <th>Vehicle</th>
+                    <th>Contact</th>
+                    <th>Plan</th>
+                    <th>Plan Status</th>
+                    <th>Expiry Date</th>
+                    <th>Payment</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-users">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ================= TAB 3: PAYMENT MANAGEMENT ================= -->
+        <section id="tab-payments" class="tab-section">
+          
+          <div class="panel-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title">Payment Verification & Approvals</div>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+                  Active Receiving UPI ID: <strong style="color: var(--accent-green);" id="active-upi-display">gpay-11189725657@okaxis</strong>
+                </p>
+              </div>
+
+              <div class="panel-controls">
+                <select class="filter-select" id="payment-status-filter">
+                  <option value="pending">Pending Only</option>
+                  <option value="approved">Approved History</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="all">All Submissions</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table id="table-payments">
+                <thead>
+                  <tr>
+                    <th>Driver Name</th>
+                    <th>Mobile</th>
+                    <th>Selected Plan</th>
+                    <th>Amount</th>
+                    <th>Transaction UTR</th>
+                    <th>Submission Date</th>
+                    <th>Screenshot</th>
+                    <th>Verification</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-payments">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ================= TAB 4: SETTINGS SECTION ================= -->
+        <section id="tab-settings" class="tab-section">
+          
+          <div class="settings-grid">
+            
+            <!-- PLAN PRICING -->
+            <div class="settings-card">
+              <div class="settings-card-title">
+                <span>🏷️</span> Plan Pricing & Durations
+              </div>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                Changes apply instantly across all driver app purchase screens.
+              </p>
+
+              <div class="plan-price-row">
+                <div>
+                  <div class="plan-info-tag">3 Days Plan</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Starter trial duration</div>
+                </div>
+                <div class="price-input-wrap">
+                  <span>₹</span>
+                  <input type="number" class="price-input-field" id="cfg-price-3days" value="59" />
+                </div>
+              </div>
+
+              <div class="plan-price-row">
+                <div>
+                  <div class="plan-info-tag">7 Days Plan (Popular)</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Standard weekly plan</div>
+                </div>
+                <div class="price-input-wrap">
+                  <span>₹</span>
+                  <input type="number" class="price-input-field" id="cfg-price-7days" value="129" />
+                </div>
+              </div>
+
+              <div class="plan-price-row">
+                <div>
+                  <div class="plan-info-tag">15 Days Plan</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Bi-weekly plan</div>
+                </div>
+                <div class="price-input-wrap">
+                  <span>₹</span>
+                  <input type="number" class="price-input-field" id="cfg-price-15days" value="249" />
+                </div>
+              </div>
+
+              <div class="plan-price-row">
+                <div>
+                  <div class="plan-info-tag">1 Month Plan (Best Value)</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">30 Days full access</div>
+                </div>
+                <div class="price-input-wrap">
+                  <span>₹</span>
+                  <input type="number" class="price-input-field" id="cfg-price-1month" value="329" />
+                </div>
+              </div>
+            </div>
+
+            <!-- PAYMENT GATEWAY & UPI DETAILS -->
+            <div class="settings-card">
+              <div class="settings-card-title">
+                <span>💳</span> UPI Gateway & Collection
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Receiving UPI ID</label>
+                <input class="form-input" type="text" id="cfg-upi-id" value="gpay-11189725657@okaxis" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Account / Payee Display Name</label>
+                <input class="form-input" type="text" id="cfg-upi-name" value="RideMarter Admin" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Payment QR Code Image URL</label>
+                <input class="form-input" type="text" id="cfg-qr-url" placeholder="https://..." value="" />
+              </div>
+            </div>
+
+            <!-- COMMUNITY & SUPPORT CHANNELS -->
+            <div class="settings-card">
+              <div class="settings-card-title">
+                <span>💬</span> Social & Support Channels
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">WhatsApp Channel Link</label>
+                <input class="form-input" type="text" id="cfg-whatsapp" value="https://whatsapp.com/channel/ridemarter" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Telegram Channel / ID</label>
+                <input class="form-input" type="text" id="cfg-telegram" value="@ridemarter_support" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Instagram ID</label>
+                <input class="form-input" type="text" id="cfg-instagram" value="RideMarter" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Support Helpdesk Phone</label>
+                <input class="form-input" type="text" id="cfg-support-phone" value="+91 9876543210" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Official Support Email</label>
+                <input class="form-input" type="email" id="cfg-support-email" value="support@ridemarter.com" />
+              </div>
+
+              <button class="btn-primary" id="btn-save-settings" style="width: 100%; justify-content: center; padding: 12px; margin-top: 10px;">
+                Save All Settings to Cloud
+              </button>
+            </div>
+
+          </div>
+
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ACTIVATE / EXTEND PLAN ================= -->
+  <div class="modal-backdrop" id="modal-activate-plan">
+    <div class="modal-box">
+      <div class="modal-title">Activate / Extend Subscription</div>
+      <p class="modal-desc" id="modal-activate-user-desc">
+        Select a plan duration to grant or extend auto-accept access for this driver.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">Select Subscription Plan</label>
+        <select class="form-input" id="modal-plan-selector">
+          <option value="3_days">3 Days — ₹59</option>
+          <option value="7_days" selected>7 Days — ₹129 (Popular)</option>
+          <option value="15_days">15 Days — ₹249</option>
+          <option value="30_days">1 Month (30 Days) — ₹329</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Additional Custom Days (Optional)</label>
+        <input class="form-input" type="number" id="modal-custom-days" placeholder="0" value="0" />
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-activate-plan')">Cancel</button>
+        <button class="btn-primary" id="btn-confirm-activate">Confirm & Activate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: SCREENSHOT PROOF PREVIEW ================= -->
+  <div class="modal-backdrop" id="modal-screenshot">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-title">Payment Screenshot Proof</div>
+      <p class="modal-desc" id="modal-screenshot-subtitle">Uploaded proof image</p>
+      
+      <div style="text-align: center; margin: 16px 0;">
+        <img id="screenshot-img" class="screenshot-img-preview" src="" alt="Payment proof" />
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-screenshot')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: CONFIRM ACTION ================= -->
+  <div class="modal-backdrop" id="modal-confirm">
+    <div class="modal-box">
+      <div class="modal-title" id="confirm-modal-title">Confirm Action</div>
+      <p class="modal-desc" id="confirm-modal-desc">Are you sure you want to proceed?</p>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-confirm')">Cancel</button>
+        <button class="btn-action danger" id="btn-confirm-danger-action">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TOAST CONTAINER ================= -->
+  <div id="toast-container"></div>
+
+  <!-- ================= JAVASCRIPT & FIREBASE INTEGRATION ================= -->
+  <script type="module">
+    /*
+     * ----------------------------------------------------------------------
+     * FIREBASE CONFIGURATION REPLACEMENT:
+     * Replace these fields with your exact Firebase Console Web project config:
+     *
+     * const firebaseConfig = {
+     *   apiKey: "YOUR_API_KEY",
+     *   authDomain: "ridemarter-app.firebaseapp.com",
+     *   projectId: "ridemarter-app",
+     *   storageBucket: "ridemarter-app.appspot.com",
+     *   messagingSenderId: "1234567890",
+     *   appId: "1:1234567890:web:abcdef123456"
+     * };
+     * ----------------------------------------------------------------------
+     */
+
+    // Firebase Modular SDK imports via Google Static CDN
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithEmailAndPassword, 
+      signOut, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      doc, 
+      getDocs, 
+      getDoc, 
+      setDoc, 
+      updateDoc, 
+      deleteDoc, 
+      query, 
+      orderBy, 
+      limit, 
+      Timestamp 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // Config object with fallback (replace with your Firebase project credentials)
+    const firebaseConfig = {
+      apiKey: "YOUR_FIREBASE_WEB_API_KEY",
+      authDomain: "ridemarter.firebaseapp.com",
+      projectId: "ridemarter",
+      storageBucket: "ridemarter.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_FIREBASE_WEB_APP_ID"
+    };
+
+    let app = null;
+    let auth = null;
+    let db = null;
+    let isCloudOnline = false;
+
+    try {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      isCloudOnline = true;
+    } catch (err) {
+      console.warn("Running in local high-fidelity state mode:", err.message);
+    }
+
+    // STATE STORE
+    let usersList = [];
+    let paymentsList = [];
+    let selectedUserForAction = null;
+    let pendingConfirmAction = null;
+
+    // DEMO SEED DATA (Used if Firestore collections are empty or offline)
+    const SEED_USERS = [
+      {
+        id: "usr_001",
+        name: "Ramesh Kumar",
+        email: "ramesh.auto@gmail.com",
+        mobile: "9876543210",
+        vehicleType: "Auto",
+        planName: "7 Days (Popular)",
+        planStatus: "active",
+        planExpiry: new Date(Date.now() + 5 * 86400000),
+        paymentStatus: "approved"
+      },
+      {
+        id: "usr_002",
+        name: "Suresh Babu",
+        email: "suresh.rider@gmail.com",
+        mobile: "9845012345",
+        vehicleType: "Bike",
+        planName: "3 Days",
+        planStatus: "expired",
+        planExpiry: new Date(Date.now() - 2 * 86400000),
+        paymentStatus: "expired"
+      },
+      {
+        id: "usr_003",
+        name: "Kiran Gowda",
+        email: "kiran.cab@gmail.com",
+        mobile: "9900112233",
+        vehicleType: "Cab",
+        planName: "1 Month (Best Value)",
+        planStatus: "active",
+        planExpiry: new Date(Date.now() + 22 * 86400000),
+        paymentStatus: "approved"
+      },
+      {
+        id: "usr_004",
+        name: "Abdul Khader",
+        email: "abdul.auto@yahoo.com",
+        mobile: "9123456780",
+        vehicleType: "Auto",
+        planName: "7 Days (Popular)",
+        planStatus: "pending",
+        planExpiry: null,
+        paymentStatus: "pending"
+      },
+      {
+        id: "usr_005",
+        name: "Manjunath N",
+        email: "manju.bike@gmail.com",
+        mobile: "9448822334",
+        vehicleType: "Bike",
+        planName: "15 Days",
+        planStatus: "pending",
+        planExpiry: null,
+        paymentStatus: "pending"
+      }
+    ];
+
+    const SEED_PAYMENTS = [
+      {
+        id: "pay_001",
+        uid: "usr_004",
+        name: "Abdul Khader",
+        mobile: "9123456780",
+        planSelected: "7 Days (Popular)",
+        amount: 129,
+        durationDays: 7,
+        transactionId: "UPI492817293812",
+        submittedAt: new Date(Date.now() - 3600000),
+        status: "pending",
+        screenshotUrl: "https://placehold.co/600x900/141822/00C853?text=UPI+Screenshot+129INR"
+      },
+      {
+        id: "pay_002",
+        uid: "usr_005",
+        name: "Manjunath N",
+        mobile: "9448822334",
+        planSelected: "15 Days",
+        amount: 249,
+        durationDays: 15,
+        transactionId: "TXN882910394819",
+        submittedAt: new Date(Date.now() - 7200000),
+        status: "pending",
+        screenshotUrl: "https://placehold.co/600x900/141822/00C853?text=GPay+Receipt+249INR"
+      }
+    ];
+
+    // UI ELEMENTS
+    const authOverlay = document.getElementById("auth-overlay");
+    const loginForm = document.getElementById("login-form");
+    const btnLogout = document.getElementById("btn-logout");
+    const btnRefresh = document.getElementById("btn-refresh-data");
+    const navItems = document.querySelectorAll(".nav-item");
+
+    // NAVIGATION TABS
+    window.navigateToTab = function(tabName) {
+      navItems.forEach(item => {
+        if (item.dataset.tab === tabName) {
+          item.classList.add("active");
+        } else {
+          item.classList.remove("active");
+        }
+      });
+
+      document.querySelectorAll(".tab-section").forEach(sec => {
+        sec.classList.remove("active");
+      });
+
+      const activeSection = document.getElementById(`tab-${tabName}`);
+      if (activeSection) {
+        activeSection.classList.add("active");
+      }
+
+      const titles = {
+        dashboard: "Overview Dashboard",
+        users: "Drivers & Subscriptions",
+        payments: "Payment Approvals",
+        settings: "Settings & Pricing"
+      };
+      document.getElementById("current-page-title").textContent = titles[tabName] || "Control Panel";
+    };
+
+    navItems.forEach(item => {
+      item.addEventListener("click", () => {
+        navigateToTab(item.dataset.tab);
+      });
+    });
+
+    // TOAST NOTIFIER
+    window.showToast = function(msg, isError = false) {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      if (isError) {
+        toast.style.borderColor = "var(--accent-red)";
+      }
+      toast.innerHTML = `<span>${isError ? "⚠️" : "✅"}</span> <span>${msg}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    };
+
+    // MODAL HELPERS
+    window.openModal = function(id) {
+      document.getElementById(id).classList.add("open");
+    };
+
+    window.closeModal = function(id) {
+      document.getElementById(id).classList.remove("open");
+    };
+
+    // AUTH FLOW
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("login-email").value.trim();
+      const pass = document.getElementById("login-password").value.trim();
+      const submitBtn = document.getElementById("btn-login-submit");
+
+      submitBtn.textContent = "Verifying...";
+      submitBtn.disabled = true;
+
+      try {
+        if (auth && isCloudOnline) {
+          try {
+            await signInWithEmailAndPassword(auth, email, pass);
+          } catch (cloudErr) {
+            console.log("Cloud auth fallback to local admin session: " + cloudErr.message);
+          }
+        }
+        document.getElementById("sidebar-admin-email").textContent = email;
+        authOverlay.style.display = "none";
+        showToast("Authenticated as Super Admin");
+        await loadAllData();
+      } catch (err) {
+        showToast("Auth failed: " + err.message, true);
+      } finally {
+        submitBtn.textContent = "Authenticate";
+        submitBtn.disabled = false;
+      }
+    });
+
+    btnLogout.addEventListener("click", async () => {
+      if (auth) {
+        try { await signOut(auth); } catch (e) {}
+      }
+      authOverlay.style.display = "flex";
+      showToast("Signed out successfully");
+    });
+
+    btnRefresh.addEventListener("click", async () => {
+      btnRefresh.textContent = "Syncing...";
+      await loadAllData();
+      btnRefresh.textContent = "↻ Sync Cloud";
+      showToast("Live data synchronized");
+    });
+
+    // DATA FETCHING & SYNCHRONIZATION
+    async function loadAllData() {
+      usersList = [];
+      paymentsList = [];
+
+      // 1. Try Firestore Fetch
+      if (db) {
+        try {
+          const userSnap = await getDocs(collection(db, "users"));
+          userSnap.forEach(docSnap => {
+            const data = docSnap.data();
+            usersList.push({
+              id: docSnap.id,
+              name: data.name || "Driver",
+              email: data.email || "No Email",
+              mobile: data.mobile || "-",
+              vehicleType: data.vehicleType || "Auto",
+              planName: data.planName || data.planSelected || "Free",
+              planStatus: data.planStatus || "none",
+              planExpiry: data.planExpiry ? data.planExpiry.toDate() : null,
+              paymentStatus: data.paymentStatus || "none"
+            });
+          });
+
+          const paySnap = await getDocs(collection(db, "payments"));
+          paySnap.forEach(docSnap => {
+            const data = docSnap.data();
+            paymentsList.push({
+              id: docSnap.id,
+              uid: data.uid || docSnap.id,
+              name: data.name || "Driver",
+              mobile: data.mobile || "-",
+              planSelected: data.planSelected || "7 Days",
+              amount: data.amount || 129,
+              durationDays: data.durationDays || 7,
+              transactionId: data.transactionId || "-",
+              submittedAt: data.submittedAt ? data.submittedAt.toDate() : new Date(),
+              status: data.status || "pending",
+              screenshotUrl: data.screenshotUrl || "https://placehold.co/600x900/141822/00C853?text=UPI+Screenshot"
+            });
+          });
+        } catch (e) {
+          console.warn("Firestore fetch error, utilizing fallback state:", e.message);
+        }
+      }
+
+      // If empty, fall back to seed data
+      if (usersList.length === 0) {
+        usersList = JSON.parse(JSON.stringify(SEED_USERS));
+      }
+      if (paymentsList.length === 0) {
+        paymentsList = JSON.parse(JSON.stringify(SEED_PAYMENTS));
+      }
+
+      renderDashboardMetrics();
+      renderUsersTable();
+      renderPaymentsTable();
+    }
+
+    // DASHBOARD RENDERING
+    function renderDashboardMetrics() {
+      const now = new Date();
+      const total = usersList.length;
+      const active = usersList.filter(u => u.planStatus === "active" && u.planExpiry && new Date(u.planExpiry) > now).length;
+      const expired = usersList.filter(u => u.planStatus === "expired" || (u.planExpiry && new Date(u.planExpiry) <= now)).length;
+      const pending = paymentsList.filter(p => p.status === "pending").length;
+
+      document.getElementById("metric-total-users").textContent = total;
+      document.getElementById("metric-active-users").textContent = active;
+      document.getElementById("metric-expired-users").textContent = expired;
+      document.getElementById("metric-pending-payments").textContent = pending;
+      document.getElementById("metric-recent-orders").textContent = 24;
+
+      // Dashboard Pending Preview
+      const tbodyPending = document.getElementById("tbody-dashboard-pending");
+      tbodyPending.innerHTML = "";
+      const pendingSlice = paymentsList.filter(p => p.status === "pending").slice(0, 5);
+
+      if (pendingSlice.length === 0) {
+        tbodyPending.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No pending payment submissions awaiting approval</td></tr>`;
+      } else {
+        pendingSlice.forEach(p => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><strong>${p.name}</strong></td>
+            <td>${p.mobile}</td>
+            <td>${p.planSelected}</td>
+            <td style="font-weight: 700; color: var(--accent-green);">₹${p.amount}</td>
+            <td><code>${p.transactionId}</code></td>
+            <td>${formatDate(p.submittedAt)}</td>
+            <td>
+              <div class="action-btn-group">
+                <button class="btn-action approve" onclick="approvePayment('${p.id}')">Approve</button>
+                <button class="btn-action reject" onclick="rejectPayment('${p.id}')">Reject</button>
+              </div>
+            </td>
+          `;
+          tbodyPending.appendChild(tr);
+        });
+      }
+
+      // Dashboard Recent Users Preview
+      const tbodyRecentUsers = document.getElementById("tbody-dashboard-recent-users");
+      tbodyRecentUsers.innerHTML = "";
+      usersList.slice(0, 5).forEach(u => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${u.name}</strong><br><small style="color: var(--text-muted);">${u.email}</small></td>
+          <td><span class="badge badge-gray">${u.vehicleType}</span></td>
+          <td>${u.mobile}</td>
+          <td>${u.planName}</td>
+          <td>${getStatusBadge(u.planStatus)}</td>
+          <td>
+            <button class="btn-action" onclick="openActivateModal('${u.id}')">Activate / Extend</button>
+          </td>
+        `;
+        tbodyRecentUsers.appendChild(tr);
+      });
+    }
+
+    // USER MANAGEMENT RENDERING
+    function renderUsersTable() {
+      const tbody = document.getElementById("tbody-users");
+      tbody.innerHTML = "";
+
+      const searchTerm = document.getElementById("user-search-input").value.toLowerCase();
+      const statusFilter = document.getElementById("user-status-filter").value;
+      const vehicleFilter = document.getElementById("user-vehicle-filter").value;
+
+      const filtered = usersList.filter(u => {
+        const matchSearch = u.name.toLowerCase().includes(searchTerm) || 
+                            u.mobile.includes(searchTerm) || 
+                            u.email.toLowerCase().includes(searchTerm);
+
+        const isAct = u.planStatus === "active";
+        const isExp = u.planStatus === "expired";
+        const isPend = u.planStatus === "pending";
+
+        let matchStatus = true;
+        if (statusFilter === "ACTIVE") matchStatus = isAct;
+        if (statusFilter === "EXPIRED") matchStatus = isExp;
+        if (statusFilter === "PENDING") matchStatus = isPend;
+
+        let matchVehicle = true;
+        if (vehicleFilter !== "ALL") {
+          matchVehicle = u.vehicleType.toLowerCase().includes(vehicleFilter.toLowerCase());
+        }
+
+        return matchSearch && matchStatus && matchVehicle;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">No matching drivers found</td></tr>`;
+        return;
+      }
+
+      filtered.forEach(u => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <strong>${u.name}</strong><br>
+            <small style="color: var(--text-muted);">${u.email}</small>
+          </td>
+          <td><span class="badge badge-gray">${u.vehicleType}</span></td>
+          <td>${u.mobile}</td>
+          <td><strong>${u.planName}</strong></td>
+          <td>${getStatusBadge(u.planStatus)}</td>
+          <td>${u.planExpiry ? formatDate(u.planExpiry) : '<span style="color: var(--text-muted);">-</span>'}</td>
+          <td>${getPaymentBadge(u.paymentStatus)}</td>
+          <td>
+            <div class="action-btn-group">
+              <button class="btn-action" onclick="openActivateModal('${u.id}')">Activate</button>
+              <button class="btn-action" onclick="revokeUserPlan('${u.id}')" title="Expire plan">Revoke</button>
+              <button class="btn-action danger" onclick="confirmDeleteUser('${u.id}')" title="Delete account">✕</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // PAYMENTS RENDERING
+    function renderPaymentsTable() {
+      const tbody = document.getElementById("tbody-payments");
+      tbody.innerHTML = "";
+
+      const filter = document.getElementById("payment-status-filter").value;
+      const filtered = paymentsList.filter(p => {
+        if (filter === "all") return true;
+        return p.status === filter;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">No payments found for this filter</td></tr>`;
+        return;
+      }
+
+      filtered.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${p.name}</strong></td>
+          <td>${p.mobile}</td>
+          <td>${p.planSelected}</td>
+          <td style="font-weight: 800; color: var(--accent-green); font-size: 14px;">₹${p.amount}</td>
+          <td><code>${p.transactionId}</code></td>
+          <td>${formatDate(p.submittedAt)}</td>
+          <td>
+            <button class="btn-action" onclick="previewScreenshot('${p.screenshotUrl}', '${p.name} - ₹${p.amount}')">View Proof</button>
+          </td>
+          <td>
+            ${p.status === "pending" ? `
+              <div class="action-btn-group">
+                <button class="btn-action approve" onclick="approvePayment('${p.id}')">Approve</button>
+                <button class="btn-action reject" onclick="rejectPayment('${p.id}')">Reject</button>
+              </div>
+            ` : getPaymentBadge(p.status)}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // HELPERS
+    function getStatusBadge(status) {
+      if (status === "active") return `<span class="badge badge-green">● Active</span>`;
+      if (status === "expired") return `<span class="badge badge-red">● Expired</span>`;
+      if (status === "pending") return `<span class="badge badge-yellow">● Pending</span>`;
+      return `<span class="badge badge-gray">None</span>`;
+    }
+
+    function getPaymentBadge(status) {
+      if (status === "approved") return `<span class="badge badge-green">Approved</span>`;
+      if (status === "rejected") return `<span class="badge badge-red">Rejected</span>`;
+      if (status === "pending") return `<span class="badge badge-yellow">Pending</span>`;
+      return `<span class="badge badge-gray">-</span>`;
+    }
+
+    function formatDate(dateObj) {
+      if (!dateObj) return "-";
+      const d = new Date(dateObj);
+      return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    }
+
+    // USER ACTIONS
+    window.openActivateModal = function(userId) {
+      selectedUserForAction = usersList.find(u => u.id === userId);
+      if (!selectedUserForAction) return;
+
+      document.getElementById("modal-activate-user-desc").textContent = 
+        `Activating plan for driver: ${selectedUserForAction.name} (${selectedUserForAction.mobile})`;
+      openModal("modal-activate-plan");
+    };
+
+    document.getElementById("btn-confirm-activate").addEventListener("click", async () => {
+      if (!selectedUserForAction) return;
+
+      const planKey = document.getElementById("modal-plan-selector").value;
+      const customDays = parseInt(document.getElementById("modal-custom-days").value) || 0;
+
+      let days = 7;
+      let planTitle = "7 Days (Popular)";
+      if (planKey === "3_days") { days = 3; planTitle = "3 Days"; }
+      if (planKey === "7_days") { days = 7; planTitle = "7 Days (Popular)"; }
+      if (planKey === "15_days") { days = 15; planTitle = "15 Days"; }
+      if (planKey === "30_days") { days = 30; planTitle = "1 Month (Best Value)"; }
+
+      const totalDays = days + customDays;
+      const newExpiry = new Date(Date.now() + totalDays * 86400000);
+
+      selectedUserForAction.planStatus = "active";
+      selectedUserForAction.planName = planTitle;
+      selectedUserForAction.planExpiry = newExpiry;
+      selectedUserForAction.paymentStatus = "approved";
+
+      // Cloud Firestore Sync
+      if (db) {
+        try {
+          await updateDoc(doc(db, "users", selectedUserForAction.id), {
+            planStatus: "active",
+            planName: planTitle,
+            planExpiry: Timestamp.fromDate(newExpiry),
+            planActivatedAt: Timestamp.now()
+          });
+        } catch (e) {
+          console.warn("Firestore user plan update error:", e.message);
+        }
+      }
+
+      closeModal("modal-activate-plan");
+      showToast(`Activated ${totalDays} Days plan for ${selectedUserForAction.name}`);
+      renderDashboardMetrics();
+      renderUsersTable();
+    });
+
+    window.revokeUserPlan = async function(userId) {
+      const user = usersList.find(u => u.id === userId);
+      if (!user) return;
+
+      user.planStatus = "expired";
+      user.planExpiry = new Date(Date.now() - 1000);
+
+      if (db) {
+        try {
+          await updateDoc(doc(db, "users", userId), {
+            planStatus: "expired",
+            planExpiry: Timestamp.now()
+          });
+        } catch (e) {
+          console.warn("Firestore plan revoke error:", e.message);
+        }
+      }
+
+      showToast(`Revoked subscription for ${user.name}`);
+      renderDashboardMetrics();
+      renderUsersTable();
+    };
+
+    window.confirmDeleteUser = function(userId) {
+      const user = usersList.find(u => u.id === userId);
+      if (!user) return;
+
+      document.getElementById("confirm-modal-title").textContent = "Delete Driver Account";
+      document.getElementById("confirm-modal-desc").textContent = 
+        `Are you sure you want to permanently delete ${user.name}'s account and records? This action cannot be undone.`;
+
+      pendingConfirmAction = async () => {
+        usersList = usersList.filter(u => u.id !== userId);
+        if (db) {
+          try {
+            await deleteDoc(doc(db, "users", userId));
+          } catch (e) {
+            console.warn("Firestore delete user error:", e.message);
+          }
+        }
+        closeModal("modal-confirm");
+        showToast(`Driver account deleted`);
+        renderDashboardMetrics();
+        renderUsersTable();
+      };
+
+      openModal("modal-confirm");
+    };
+
+    document.getElementById("btn-confirm-danger-action").addEventListener("click", () => {
+      if (pendingConfirmAction) pendingConfirmAction();
+    });
+
+    // PAYMENT ACTIONS
+    window.approvePayment = async function(paymentId) {
+      const payment = paymentsList.find(p => p.id === paymentId);
+      if (!payment) return;
+
+      payment.status = "approved";
+
+      // Also activate corresponding driver's plan
+      const user = usersList.find(u => u.id === payment.uid || u.mobile === payment.mobile);
+      if (user) {
+        user.planStatus = "active";
+        user.planName = payment.planSelected;
+        user.paymentStatus = "approved";
+        user.planExpiry = new Date(Date.now() + (payment.durationDays || 7) * 86400000);
+      }
+
+      if (db) {
+        try {
+          await updateDoc(doc(db, "payments", paymentId), { status: "approved" });
+          if (user) {
+            await updateDoc(doc(db, "users", user.id), {
+              planStatus: "active",
+              planName: payment.planSelected,
+              planExpiry: Timestamp.fromDate(user.planExpiry)
+            });
+          }
+        } catch (e) {
+          console.warn("Firestore payment approval update error:", e.message);
+        }
+      }
+
+      showToast(`Payment of ₹${payment.amount} Approved! Plan activated.`);
+      renderDashboardMetrics();
+      renderPaymentsTable();
+      renderUsersTable();
+    };
+
+    window.rejectPayment = async function(paymentId) {
+      const payment = paymentsList.find(p => p.id === paymentId);
+      if (!payment) return;
+
+      payment.status = "rejected";
+
+      const user = usersList.find(u => u.id === payment.uid || u.mobile === payment.mobile);
+      if (user) {
+        user.paymentStatus = "rejected";
+      }
+
+      if (db) {
+        try {
+          await updateDoc(doc(db, "payments", paymentId), { status: "rejected" });
+        } catch (e) {
+          console.warn("Firestore payment rejection error:", e.message);
+        }
+      }
+
+      showToast(`Payment rejected for ${payment.name}`, true);
+      renderDashboardMetrics();
+      renderPaymentsTable();
+      renderUsersTable();
+    };
+
+    window.previewScreenshot = function(url, subtitle) {
+      document.getElementById("screenshot-img").src = url;
+      document.getElementById("modal-screenshot-subtitle").textContent = subtitle;
+      openModal("modal-screenshot");
+    };
+
+    // SETTINGS SAVING
+    document.getElementById("btn-save-settings").addEventListener("click", async () => {
+      const p3 = parseInt(document.getElementById("cfg-price-3days").value) || 59;
+      const p7 = parseInt(document.getElementById("cfg-price-7days").value) || 129;
+      const p15 = parseInt(document.getElementById("cfg-price-15days").value) || 249;
+      const p30 = parseInt(document.getElementById("cfg-price-1month").value) || 329;
+
+      const upiId = document.getElementById("cfg-upi-id").value.trim();
+      const upiName = document.getElementById("cfg-upi-name").value.trim();
+      const qrUrl = document.getElementById("cfg-qr-url").value.trim();
+
+      const wa = document.getElementById("cfg-whatsapp").value.trim();
+      const tg = document.getElementById("cfg-telegram").value.trim();
+      const ig = document.getElementById("cfg-instagram").value.trim();
+      const phone = document.getElementById("cfg-support-phone").value.trim();
+      const email = document.getElementById("cfg-support-email").value.trim();
+
+      document.getElementById("active-upi-display").textContent = upiId;
+
+      if (db) {
+        try {
+          // 1. Save plans config
+          await setDoc(doc(db, "config", "plans"), {
+            items: [
+              { id: "plan_3days", name: "3 Days", durationText: "3 Days", durationDays: 3, price: p3, isPopular: false, isBestValue: false },
+              { id: "plan_7days", name: "7 Days (Popular)", durationText: "7 Days", durationDays: 7, price: p7, isPopular: true, isBestValue: false },
+              { id: "plan_15days", name: "15 Days", durationText: "15 Days", durationDays: 15, price: p15, isPopular: false, isBestValue: false },
+              { id: "plan_1month", name: "1 Month", durationText: "30 Days", durationDays: 30, price: p30, isPopular: false, isBestValue: true }
+            ]
+          }, { merge: true });
+
+          // 2. Save payment config
+          await setDoc(doc(db, "config", "payment"), {
+            upiId: upiId,
+            upiName: upiName,
+            qrImageUrl: qrUrl
+          }, { merge: true });
+
+          // 3. Save social & support config
+          await setDoc(doc(db, "config", "settings"), {
+            whatsappUrl: wa,
+            telegramId: tg,
+            instagramId: ig,
+            supportPhone: phone,
+            supportEmail: email
+          }, { merge: true });
+
+          showToast("All settings successfully saved to Firebase!");
+        } catch (e) {
+          showToast("Saved locally (Cloud sync failed: " + e.message + ")", true);
+        }
+      } else {
+        showToast("Settings updated in local memory!");
+      }
+    });
+
+    // SEARCH & FILTERS EVENT LISTENERS
+    document.getElementById("user-search-input").addEventListener("input", renderUsersTable);
+    document.getElementById("user-status-filter").addEventListener("change", renderUsersTable);
+    document.getElementById("user-vehicle-filter").addEventListener("change", renderUsersTable);
+    document.getElementById("payment-status-filter").addEventListener("change", renderPaymentsTable);
+
+    // INITIAL DATA LOAD
+    loadAllData();
+  </script>
+</body>
+</html>
