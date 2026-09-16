@@ -866,8 +866,8 @@
       </form>
 
       <p class="auth-hint">
-        Direct Firebase Auth verification.<br/>
-        Demo Mode enabled for immediate dashboard exploration.
+        Secure Firebase authentication.<br/>
+        Access restricted to authorized administrators.
       </p>
     </div>
   </div>
@@ -1359,13 +1359,19 @@
 
     // Config object with fallback (replace with your Firebase project credentials)
     const firebaseConfig = {
-      apiKey: "YOUR_FIREBASE_WEB_API_KEY",
+      apiKey: "AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA",
       authDomain: "ridemarter.firebaseapp.com",
       projectId: "ridemarter",
-      storageBucket: "ridemarter.appspot.com",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_FIREBASE_WEB_APP_ID"
+      storageBucket: "ridemarter.firebasestorage.app",
+      messagingSenderId: "440889531345",
+      appId: "1:440889531345:web:ab4e1f45321e44305e5ef0",
+      measurementId: "G-X7136MK8GB"
     };
+
+    // Only these authenticated accounts can access the admin panel.
+    const ADMIN_EMAILS = new Set([
+      "kaleemagency@gmail.com"
+    ]);
 
     let app = null;
     let auth = null;
@@ -1552,18 +1558,24 @@
       submitBtn.disabled = true;
 
       try {
-        if (auth && isCloudOnline) {
-          try {
-            await signInWithEmailAndPassword(auth, email, pass);
-          } catch (cloudErr) {
-            console.log("Cloud auth fallback to local admin session: " + cloudErr.message);
-          }
+        if (!auth || !isCloudOnline) {
+          throw new Error("Firebase Authentication is unavailable.");
         }
-        document.getElementById("sidebar-admin-email").textContent = email;
+
+        const credential = await signInWithEmailAndPassword(auth, email, pass);
+        const signedInEmail = (credential.user.email || "").trim().toLowerCase();
+
+        if (!ADMIN_EMAILS.has(signedInEmail)) {
+          await signOut(auth);
+          throw new Error("This account is not authorized as an administrator.");
+        }
+
+        document.getElementById("sidebar-admin-email").textContent = signedInEmail;
         authOverlay.style.display = "none";
         showToast("Authenticated as Super Admin");
         await loadAllData();
       } catch (err) {
+        authOverlay.style.display = "flex";
         showToast("Auth failed: " + err.message, true);
       } finally {
         submitBtn.textContent = "Authenticate";
