@@ -97,8 +97,8 @@ class AuthViewModel : ViewModel() {
         onRequireRegistration: ((name: String, email: String) -> Unit)? = null
     ) {
         if (!isFirebaseAvailable()) {
-            val devName = "Driver Partner"
-            val devEmail = "driver@ridemarter.com"
+            val devName = ""
+            val devEmail = ""
             _googleProfile.value = Pair(devName, devEmail)
             _uiState.value = AuthState.Success("Google Sign-In ready (Demo Mode)")
             onRequireRegistration?.invoke(devName, devEmail)
@@ -138,7 +138,7 @@ class AuthViewModel : ViewModel() {
                         val user = authResult.user
 
                         if (user != null) {
-                            val resolvedName = displayName.ifEmpty { user.displayName ?: "Driver Partner" }
+                            val resolvedName = displayName.ifEmpty { user.displayName ?: "" }
                             val resolvedEmail = email.ifEmpty { user.email ?: "" }
                             _googleProfile.value = Pair(resolvedName, resolvedEmail)
                             handlePostLoginCheck(user.uid, onRequireRegistration)
@@ -153,15 +153,15 @@ class AuthViewModel : ViewModel() {
                 }
             } catch (e: GetCredentialException) {
                 Log.w("AuthViewModel", "CredentialManager exception: ${e.message}")
-                val devName = "Driver Partner"
-                val devEmail = "driver@ridemarter.com"
+                val devName = ""
+                val devEmail = ""
                 _googleProfile.value = Pair(devName, devEmail)
                 _uiState.value = AuthState.Success("Google Sign-In ready")
                 onRequireRegistration?.invoke(devName, devEmail)
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Google Sign-In failed", e)
-                val devName = "Driver Partner"
-                val devEmail = "driver@ridemarter.com"
+                val devName = ""
+                val devEmail = ""
                 _googleProfile.value = Pair(devName, devEmail)
                 _uiState.value = AuthState.Success("Google Sign-In ready")
                 onRequireRegistration?.invoke(devName, devEmail)
@@ -181,7 +181,7 @@ class AuthViewModel : ViewModel() {
         if (user != null) {
             handlePostLoginCheck(user.uid, onRequireRegistration)
         } else {
-            val name = _googleProfile.value?.first ?: "Driver Partner"
+            val name = _googleProfile.value?.first ?: ""
             val email = _googleProfile.value?.second ?: ""
             onRequireRegistration?.invoke(name, email)
         }

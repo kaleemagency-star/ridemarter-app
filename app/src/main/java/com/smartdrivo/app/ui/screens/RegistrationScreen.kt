@@ -102,10 +102,17 @@ fun RegistrationScreen(
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
     val googleProfile by authViewModel.googleProfile.collectAsStateWithLifecycle()
 
-    val isGoogleUser = googleProfile != null
+    val currentFirebaseUser = remember { authViewModel.getCurrentUser() }
+    val isGoogleUser = (currentFirebaseUser?.providerData?.any { it.providerId == "google.com" } == true)
+            || googleProfile != null
+    val initialEmail = remember {
+        currentFirebaseUser?.email?.ifBlank { null }
+            ?: googleProfile?.second?.ifBlank { null }
+            ?: ""
+    }
 
-    var name by remember { mutableStateOf(googleProfile?.first ?: "") }
-    var email by remember { mutableStateOf(googleProfile?.second ?: "") }
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf(initialEmail) }
     var mobile by remember { mutableStateOf("") }
     var selectedVehicle by remember { mutableStateOf<String?>(null) } // "AUTO", "BIKE", "CAR"
     var termsAccepted by remember { mutableStateOf(false) }
@@ -116,11 +123,15 @@ fun RegistrationScreen(
         authViewModel.generateUserId()
     }
 
-    // Sync google profile when it updates
+    // Sync authenticated user's email or google profile email when available if email is currently blank
     LaunchedEffect(googleProfile) {
-        googleProfile?.let {
-            if (name.isEmpty()) name = it.first
-            if (email.isEmpty()) email = it.second
+        if (email.isBlank()) {
+            val resolved = currentFirebaseUser?.email?.ifBlank { null }
+                ?: googleProfile?.second?.ifBlank { null }
+                ?: ""
+            if (resolved.isNotBlank()) {
+                email = resolved
+            }
         }
     }
 
@@ -211,8 +222,7 @@ fun RegistrationScreen(
                 )
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { if (!isGoogleUser) name = it },
-                    readOnly = isGoogleUser,
+                    onValueChange = { name = it },
                     placeholder = { Text("Enter your full name", color = DarkTextMuted, fontSize = 14.sp) },
                     leadingIcon = {
                         Icon(
@@ -257,8 +267,7 @@ fun RegistrationScreen(
                 )
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { if (!isGoogleUser) email = it },
-                    readOnly = isGoogleUser,
+                    onValueChange = { email = it },
                     placeholder = { Text("driver@email.com", color = DarkTextMuted, fontSize = 14.sp) },
                     leadingIcon = {
                         Icon(
