@@ -187,18 +187,19 @@ class PaymentViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val amountVal = _confirmedAmount.value.toIntOrNull() ?: _selectedPlan.value.price
+        val currentFirebaseUser = FirebaseAuth.getInstance().currentUser
+        val uid = currentFirebaseUser?.uid
 
-        val uid = try {
-            FirebaseAuth.getInstance().currentUser?.uid ?: "test_driver_uid"
-        } catch (e: Exception) {
-            "test_driver_uid"
+        if (uid.isNullOrBlank()) {
+            _transactionIdError.value = "Driver authentication required. Please sign in again."
+            return
         }
 
         viewModelScope.launch {
             _isSubmitting.value = true
             try {
-                // Fetch driver details
-                var name = (try { auth?.currentUser?.displayName } catch (e: Exception) { null }) ?: "Driver Partner"
+                // Fetch driver details from user document
+                var name = currentFirebaseUser.displayName ?: "Driver Partner"
                 var mobile = ""
                 var userId = "SD" + uid.take(8).uppercase()
 
@@ -216,41 +217,62 @@ class PaymentViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
+                val planSelected = "${_selectedPlan.value.name} (${_selectedPlan.value.durationText})"
+                val durationDays = _selectedPlan.value.durationDays
+                val screenshotUrl = ""
+
+                // 3. Create document in payments/{automaticDocumentId} with exact required fields:
+                // uid, name, mobile, planSelected, amount, durationDays, transactionId, submittedAt (server timestamp), status ("pending"), screenshotUrl
+                val paymentMap = hashMapOf<String, Any?>(
+                    "uid" to uid,
+                    "name" to name,
+                    "mobile" to mobile,
+                    "planSelected" to planSelected,
+                    "amount" to amountVal,
+                    "durationDays" to durationDays,
+                    "transactionId" to txId,
+                    "submittedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "status" to "pending",
+                    "screenshotUrl" to screenshotUrl
+                )
+
+                var docId = ""
+                if (db != null) {
+                    val docRef = db.collection("payments").add(paymentMap).await()
+                    docId = docRef.id
+
+                    // Update user's paymentStatus in users/{uid}
+                    try {
+                        db.collection("users").document(uid).update(
+                            mapOf(
+                                "paymentStatus" to "pending",
+                                "planName" to planSelected
+                            )
+                        ).await()
+                    } catch (e: Exception) {
+                        Log.w("PaymentViewModel", "Could not update user paymentStatus: ${e.message}")
+                    }
+                }
+
                 val paymentRecord = PaymentRecord(
+                    id = docId,
                     uid = uid,
                     userId = userId,
                     name = name,
                     mobile = mobile,
-                    planSelected = "${_selectedPlan.value.name} (${_selectedPlan.value.durationText})",
-                    durationDays = _selectedPlan.value.durationDays,
+                    planSelected = planSelected,
+                    durationDays = durationDays,
                     amount = amountVal,
                     transactionId = txId,
                     status = "pending",
+                    screenshotUrl = screenshotUrl,
                     submittedAt = Timestamp.now()
                 )
-
-                if (db != null) {
-                    db.collection("payments").document(uid).set(paymentRecord).await()
-                }
                 _existingPayment.value = paymentRecord
                 _events.emit(PaymentNavigationEvent.NavigateToPending)
             } catch (e: Exception) {
-                Log.e("PaymentViewModel", "Error submitting payment: ${e.message}")
-                // In demo/test fallback, navigate to pending anyway so user is not blocked
-                val paymentRecord = PaymentRecord(
-                    uid = uid,
-                    userId = "SD" + uid.take(8).uppercase(),
-                    name = "Driver Partner",
-                    mobile = "9876543210",
-                    planSelected = "${_selectedPlan.value.name} (${_selectedPlan.value.durationText})",
-                    durationDays = _selectedPlan.value.durationDays,
-                    amount = amountVal,
-                    transactionId = txId,
-                    status = "pending",
-                    submittedAt = Timestamp.now()
-                )
-                _existingPayment.value = paymentRecord
-                _events.emit(PaymentNavigationEvent.NavigateToPending)
+                Log.e("PaymentViewModel", "Error submitting payment: ${e.message}", e)
+                _events.emit(PaymentNavigationEvent.ShowToast("Payment submission error: ${e.localizedMessage ?: e.message}"))
             } finally {
                 _isSubmitting.value = false
             }
@@ -269,24 +291,34 @@ class PaymentViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val db = firestore
                 if (db != null) {
-                    val doc = db.collection("payments").document(uid).get().await()
-                    if (doc.exists()) {
-                        val status = doc.getString("status") ?: "pending"
-                        val record = PaymentRecord(
-                            uid = doc.getString("uid") ?: uid,
-                            userId = doc.getString("userId") ?: "",
-                            name = doc.getString("name") ?: "",
-                            mobile = doc.getString("mobile") ?: "",
-                            planSelected = doc.getString("planSelected") ?: "",
-                            durationDays = (doc.get("durationDays") as? Number)?.toInt() ?: 0,
-                            amount = (doc.get("amount") as? Number)?.toInt() ?: 0,
-                            transactionId = doc.getString("transactionId") ?: "",
-                            status = status,
-                            submittedAt = doc.getTimestamp("submittedAt") ?: Timestamp.now(),
-                            approvedAt = doc.getTimestamp("approvedAt"),
-                            adminNote = doc.getString("adminNote") ?: ""
-                        )
-                        _existingPayment.value = record
+                    val querySnap = db.collection("payments")
+                        .whereEqualTo("uid", uid)
+                        .get()
+                        .await()
+
+                    if (!querySnap.isEmpty) {
+                        val latestDoc = querySnap.documents.maxByOrNull {
+                            it.getTimestamp("submittedAt")?.seconds ?: 0L
+                        }
+                        if (latestDoc != null) {
+                            val record = PaymentRecord(
+                                id = latestDoc.id,
+                                uid = latestDoc.getString("uid") ?: uid,
+                                userId = latestDoc.getString("userId") ?: ("SD" + uid.take(8).uppercase()),
+                                name = latestDoc.getString("name") ?: "",
+                                mobile = latestDoc.getString("mobile") ?: "",
+                                planSelected = latestDoc.getString("planSelected") ?: "",
+                                durationDays = (latestDoc.get("durationDays") as? Number)?.toInt() ?: 0,
+                                amount = (latestDoc.get("amount") as? Number)?.toInt() ?: 0,
+                                transactionId = latestDoc.getString("transactionId") ?: "",
+                                status = latestDoc.getString("status") ?: "pending",
+                                screenshotUrl = latestDoc.getString("screenshotUrl") ?: "",
+                                submittedAt = latestDoc.getTimestamp("submittedAt") ?: Timestamp.now(),
+                                approvedAt = latestDoc.getTimestamp("approvedAt"),
+                                adminNote = latestDoc.getString("adminNote") ?: ""
+                            )
+                            _existingPayment.value = record
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -299,9 +331,16 @@ class PaymentViewModel(application: Application) : AndroidViewModel(application)
 
     fun checkPaymentStatusManual() {
         val uid = try {
-            FirebaseAuth.getInstance().currentUser?.uid ?: "test_driver_uid"
+            FirebaseAuth.getInstance().currentUser?.uid
         } catch (e: Exception) {
-            "test_driver_uid"
+            null
+        }
+
+        if (uid.isNullOrBlank()) {
+            viewModelScope.launch {
+                _events.emit(PaymentNavigationEvent.ShowToast("Driver session not found. Please log in."))
+            }
+            return
         }
 
         viewModelScope.launch {
@@ -309,10 +348,28 @@ class PaymentViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val db = firestore
                 if (db != null) {
-                    val doc = db.collection("payments").document(uid).get().await()
-                    if (doc.exists()) {
-                        val status = doc.getString("status") ?: "pending"
-                        val adminNote = doc.getString("adminNote") ?: ""
+                    // Check user document first for planStatus or paymentStatus
+                    val userDoc = db.collection("users").document(uid).get().await()
+                    val userPlanStatus = userDoc.getString("planStatus") ?: "none"
+                    val userPayStatus = userDoc.getString("paymentStatus") ?: "none"
+
+                    if (userPlanStatus.equals("active", ignoreCase = true) || userPayStatus.equals("approved", ignoreCase = true)) {
+                        _events.emit(PaymentNavigationEvent.NavigateToDashboard)
+                        return@launch
+                    }
+
+                    // Check payments collection
+                    val querySnap = db.collection("payments")
+                        .whereEqualTo("uid", uid)
+                        .get()
+                        .await()
+
+                    if (!querySnap.isEmpty) {
+                        val latestDoc = querySnap.documents.maxByOrNull {
+                            it.getTimestamp("submittedAt")?.seconds ?: 0L
+                        }
+                        val status = latestDoc?.getString("status") ?: "pending"
+                        val adminNote = latestDoc?.getString("adminNote") ?: ""
 
                         when (status.lowercase()) {
                             "approved" -> {
@@ -340,10 +397,10 @@ class PaymentViewModel(application: Application) : AndroidViewModel(application)
                         _events.emit(PaymentNavigationEvent.ShowToast("No payment record found. Please submit your payment details."))
                     }
                 } else {
-                    _events.emit(PaymentNavigationEvent.ShowToast("Payment status: Demo Mode (Verification Pending)"))
+                    _events.emit(PaymentNavigationEvent.ShowToast("Unable to connect to database."))
                 }
             } catch (e: Exception) {
-                _events.emit(PaymentNavigationEvent.ShowToast("Unable to check status right now."))
+                _events.emit(PaymentNavigationEvent.ShowToast("Unable to check status right now: ${e.message}"))
             } finally {
                 _isCheckingStatus.value = false
             }
@@ -360,13 +417,31 @@ class PaymentViewModel(application: Application) : AndroidViewModel(application)
 
         autoPollJob = viewModelScope.launch {
             while (isActive) {
-                delay(30_000) // Poll every 30 seconds
+                delay(20_000) // Poll every 20 seconds
                 try {
                     val db = firestore
                     if (db != null) {
-                        val doc = db.collection("payments").document(uid).get().await()
-                        if (doc.exists()) {
-                            val status = doc.getString("status") ?: "pending"
+                        // Check user doc
+                        val userDoc = db.collection("users").document(uid).get().await()
+                        val planStatus = userDoc.getString("planStatus") ?: "none"
+                        val paymentStatus = userDoc.getString("paymentStatus") ?: "none"
+
+                        if (planStatus.equals("active", ignoreCase = true) || paymentStatus.equals("approved", ignoreCase = true)) {
+                            onApproved()
+                            break
+                        }
+
+                        // Check payments collection
+                        val querySnap = db.collection("payments")
+                            .whereEqualTo("uid", uid)
+                            .get()
+                            .await()
+
+                        val latestDoc = querySnap.documents.maxByOrNull {
+                            it.getTimestamp("submittedAt")?.seconds ?: 0L
+                        }
+                        if (latestDoc != null) {
+                            val status = latestDoc.getString("status") ?: "pending"
                             if (status.equals("approved", ignoreCase = true)) {
                                 onApproved()
                                 break

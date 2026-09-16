@@ -856,7 +856,7 @@
       <form id="login-form">
         <div class="form-group">
           <label class="form-label" for="login-email">Admin Email</label>
-          <input class="form-input" type="email" id="login-email" placeholder="admin@example.com" required value="" />
+          <input class="form-input" type="email" id="login-email" placeholder="kaleemagency@gmail.com" required value="kaleemagency@gmail.com" />
         </div>
         <div class="form-group">
           <label class="form-label" for="login-password">Password</label>
@@ -866,8 +866,8 @@
       </form>
 
       <p class="auth-hint">
-        Secure Firebase authentication.<br/>
-        Access restricted to authorized administrators.
+        Direct Firebase Authentication verification.<br/>
+        Restricted exclusively to kaleemagency@gmail.com.
       </p>
     </div>
   </div>
@@ -1359,19 +1359,13 @@
 
     // Config object with fallback (replace with your Firebase project credentials)
     const firebaseConfig = {
-      apiKey: "AIzaSyBYQ7RCBmXwtp7-O7YqNRm0Nx2gm8K85bA",
+      apiKey: "YOUR_FIREBASE_WEB_API_KEY",
       authDomain: "ridemarter.firebaseapp.com",
       projectId: "ridemarter",
-      storageBucket: "ridemarter.firebasestorage.app",
-      messagingSenderId: "440889531345",
-      appId: "1:440889531345:web:ab4e1f45321e44305e5ef0",
-      measurementId: "G-X7136MK8GB"
+      storageBucket: "ridemarter.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_FIREBASE_WEB_APP_ID"
     };
-
-    // Only these authenticated accounts can access the admin panel.
-    const ADMIN_EMAILS = new Set([
-      "kaleemagency@gmail.com"
-    ]);
 
     let app = null;
     let auth = null;
@@ -1392,94 +1386,6 @@
     let paymentsList = [];
     let selectedUserForAction = null;
     let pendingConfirmAction = null;
-
-    // DEMO SEED DATA (Used if Firestore collections are empty or offline)
-    const SEED_USERS = [
-      {
-        id: "usr_001",
-        name: "Ramesh Kumar",
-        email: "ramesh.auto@gmail.com",
-        mobile: "9876543210",
-        vehicleType: "Auto",
-        planName: "7 Days (Popular)",
-        planStatus: "active",
-        planExpiry: new Date(Date.now() + 5 * 86400000),
-        paymentStatus: "approved"
-      },
-      {
-        id: "usr_002",
-        name: "Suresh Babu",
-        email: "suresh.rider@gmail.com",
-        mobile: "9845012345",
-        vehicleType: "Bike",
-        planName: "3 Days",
-        planStatus: "expired",
-        planExpiry: new Date(Date.now() - 2 * 86400000),
-        paymentStatus: "expired"
-      },
-      {
-        id: "usr_003",
-        name: "Kiran Gowda",
-        email: "kiran.cab@gmail.com",
-        mobile: "9900112233",
-        vehicleType: "Cab",
-        planName: "1 Month (Best Value)",
-        planStatus: "active",
-        planExpiry: new Date(Date.now() + 22 * 86400000),
-        paymentStatus: "approved"
-      },
-      {
-        id: "usr_004",
-        name: "Abdul Khader",
-        email: "abdul.auto@yahoo.com",
-        mobile: "9123456780",
-        vehicleType: "Auto",
-        planName: "7 Days (Popular)",
-        planStatus: "pending",
-        planExpiry: null,
-        paymentStatus: "pending"
-      },
-      {
-        id: "usr_005",
-        name: "Manjunath N",
-        email: "manju.bike@gmail.com",
-        mobile: "9448822334",
-        vehicleType: "Bike",
-        planName: "15 Days",
-        planStatus: "pending",
-        planExpiry: null,
-        paymentStatus: "pending"
-      }
-    ];
-
-    const SEED_PAYMENTS = [
-      {
-        id: "pay_001",
-        uid: "usr_004",
-        name: "Abdul Khader",
-        mobile: "9123456780",
-        planSelected: "7 Days (Popular)",
-        amount: 129,
-        durationDays: 7,
-        transactionId: "UPI492817293812",
-        submittedAt: new Date(Date.now() - 3600000),
-        status: "pending",
-        screenshotUrl: "https://placehold.co/600x900/141822/00C853?text=UPI+Screenshot+129INR"
-      },
-      {
-        id: "pay_002",
-        uid: "usr_005",
-        name: "Manjunath N",
-        mobile: "9448822334",
-        planSelected: "15 Days",
-        amount: 249,
-        durationDays: 15,
-        transactionId: "TXN882910394819",
-        submittedAt: new Date(Date.now() - 7200000),
-        status: "pending",
-        screenshotUrl: "https://placehold.co/600x900/141822/00C853?text=GPay+Receipt+249INR"
-      }
-    ];
 
     // UI ELEMENTS
     const authOverlay = document.getElementById("auth-overlay");
@@ -1550,38 +1456,58 @@
     // AUTH FLOW
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const email = document.getElementById("login-email").value.trim();
+      const email = document.getElementById("login-email").value.trim().toLowerCase();
       const pass = document.getElementById("login-password").value.trim();
       const submitBtn = document.getElementById("btn-login-submit");
 
-      submitBtn.textContent = "Verifying...";
+      if (email !== "kaleemagency@gmail.com") {
+        showToast("Access Denied: Admin panel is restricted to kaleemagency@gmail.com", true);
+        return;
+      }
+
+      submitBtn.textContent = "Verifying with Firebase...";
       submitBtn.disabled = true;
 
       try {
-        if (!auth || !isCloudOnline) {
-          throw new Error("Firebase Authentication is unavailable.");
+        if (!auth) {
+          throw new Error("Firebase Authentication is not initialized.");
         }
+        const userCred = await signInWithEmailAndPassword(auth, email, pass);
+        const signedInEmail = (userCred.user?.email || "").toLowerCase();
 
-        const credential = await signInWithEmailAndPassword(auth, email, pass);
-        const signedInEmail = (credential.user.email || "").trim().toLowerCase();
-
-        if (!ADMIN_EMAILS.has(signedInEmail)) {
+        if (signedInEmail !== "kaleemagency@gmail.com") {
           await signOut(auth);
-          throw new Error("This account is not authorized as an administrator.");
+          throw new Error("Unauthorized: Only kaleemagency@gmail.com is permitted.");
         }
 
-        document.getElementById("sidebar-admin-email").textContent = signedInEmail;
+        document.getElementById("sidebar-admin-email").textContent = userCred.user.email;
         authOverlay.style.display = "none";
         showToast("Authenticated as Super Admin");
         await loadAllData();
       } catch (err) {
+        console.error("Firebase Authentication Error:", err);
         authOverlay.style.display = "flex";
-        showToast("Auth failed: " + err.message, true);
+        showToast("Firebase Authentication Failed: " + (err.message || "Invalid credentials"), true);
       } finally {
         submitBtn.textContent = "Authenticate";
         submitBtn.disabled = false;
       }
     });
+
+    if (auth) {
+      onAuthStateChanged(auth, async (user) => {
+        if (user && user.email && user.email.toLowerCase() === "kaleemagency@gmail.com") {
+          document.getElementById("sidebar-admin-email").textContent = user.email;
+          authOverlay.style.display = "none";
+          await loadAllData();
+        } else {
+          if (user) {
+            try { await signOut(auth); } catch (e) {}
+          }
+          authOverlay.style.display = "flex";
+        }
+      });
+    }
 
     btnLogout.addEventListener("click", async () => {
       if (auth) {
@@ -1603,7 +1529,7 @@
       usersList = [];
       paymentsList = [];
 
-      // 1. Try Firestore Fetch
+      // 1. Fetch from Firestore collections "users" and "payments"
       if (db) {
         try {
           const userSnap = await getDocs(collection(db, "users"));
@@ -1612,13 +1538,15 @@
             usersList.push({
               id: docSnap.id,
               name: data.name || "Driver",
-              email: data.email || "No Email",
+              email: data.email || "-",
               mobile: data.mobile || "-",
               vehicleType: data.vehicleType || "Auto",
-              planName: data.planName || data.planSelected || "Free",
+              planName: data.planName || "none",
               planStatus: data.planStatus || "none",
-              planExpiry: data.planExpiry ? data.planExpiry.toDate() : null,
-              paymentStatus: data.paymentStatus || "none"
+              paymentStatus: data.paymentStatus || "none",
+              planExpiry: data.planExpiry ? (data.planExpiry.toDate ? data.planExpiry.toDate() : new Date(data.planExpiry)) : null,
+              createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : null,
+              approved: data.approved || false
             });
           });
 
@@ -1627,29 +1555,29 @@
             const data = docSnap.data();
             paymentsList.push({
               id: docSnap.id,
-              uid: data.uid || docSnap.id,
+              uid: data.uid || "-",
               name: data.name || "Driver",
               mobile: data.mobile || "-",
-              planSelected: data.planSelected || "7 Days",
-              amount: data.amount || 129,
-              durationDays: data.durationDays || 7,
+              planSelected: data.planSelected || "-",
+              amount: data.amount || 0,
+              durationDays: data.durationDays || 0,
               transactionId: data.transactionId || "-",
-              submittedAt: data.submittedAt ? data.submittedAt.toDate() : new Date(),
+              submittedAt: data.submittedAt ? (data.submittedAt.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt)) : new Date(),
               status: data.status || "pending",
-              screenshotUrl: data.screenshotUrl || "https://placehold.co/600x900/141822/00C853?text=UPI+Screenshot"
+              screenshotUrl: data.screenshotUrl || ""
             });
           });
-        } catch (e) {
-          console.warn("Firestore fetch error, utilizing fallback state:", e.message);
-        }
-      }
 
-      // If empty, fall back to seed data
-      if (usersList.length === 0) {
-        usersList = JSON.parse(JSON.stringify(SEED_USERS));
-      }
-      if (paymentsList.length === 0) {
-        paymentsList = JSON.parse(JSON.stringify(SEED_PAYMENTS));
+          paymentsList.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+          usersList.sort((a, b) => {
+            if (!a.createdAt) return 1;
+            if (!b.createdAt) return -1;
+            return new Date(b.createdAt) - new Date(a.createdAt);
+          });
+        } catch (e) {
+          console.error("Firestore live fetch error:", e);
+          showToast("Failed to fetch live Firestore data: " + e.message, true);
+        }
       }
 
       renderDashboardMetrics();
@@ -1669,7 +1597,7 @@
       document.getElementById("metric-active-users").textContent = active;
       document.getElementById("metric-expired-users").textContent = expired;
       document.getElementById("metric-pending-payments").textContent = pending;
-      document.getElementById("metric-recent-orders").textContent = 24;
+      document.getElementById("metric-recent-orders").textContent = paymentsList.length;
 
       // Dashboard Pending Preview
       const tbodyPending = document.getElementById("tbody-dashboard-pending");
@@ -1677,7 +1605,7 @@
       const pendingSlice = paymentsList.filter(p => p.status === "pending").slice(0, 5);
 
       if (pendingSlice.length === 0) {
-        tbodyPending.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No pending payment submissions awaiting approval</td></tr>`;
+        tbodyPending.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px; font-weight: 500;">No payments found</td></tr>`;
       } else {
         pendingSlice.forEach(p => {
           const tr = document.createElement("tr");
@@ -1702,26 +1630,35 @@
       // Dashboard Recent Users Preview
       const tbodyRecentUsers = document.getElementById("tbody-dashboard-recent-users");
       tbodyRecentUsers.innerHTML = "";
-      usersList.slice(0, 5).forEach(u => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${u.name}</strong><br><small style="color: var(--text-muted);">${u.email}</small></td>
-          <td><span class="badge badge-gray">${u.vehicleType}</span></td>
-          <td>${u.mobile}</td>
-          <td>${u.planName}</td>
-          <td>${getStatusBadge(u.planStatus)}</td>
-          <td>
-            <button class="btn-action" onclick="openActivateModal('${u.id}')">Activate / Extend</button>
-          </td>
-        `;
-        tbodyRecentUsers.appendChild(tr);
-      });
+      if (usersList.length === 0) {
+        tbodyRecentUsers.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px; font-weight: 500;">No users found</td></tr>`;
+      } else {
+        usersList.slice(0, 5).forEach(u => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><strong>${u.name}</strong><br><small style="color: var(--text-muted);">${u.email}</small></td>
+            <td><span class="badge badge-gray">${u.vehicleType}</span></td>
+            <td>${u.mobile}</td>
+            <td>${u.planName}</td>
+            <td>${getStatusBadge(u.planStatus)}</td>
+            <td>
+              <button class="btn-action" onclick="openActivateModal('${u.id}')">Activate / Extend</button>
+            </td>
+          `;
+          tbodyRecentUsers.appendChild(tr);
+        });
+      }
     }
 
     // USER MANAGEMENT RENDERING
     function renderUsersTable() {
       const tbody = document.getElementById("tbody-users");
       tbody.innerHTML = "";
+
+      if (usersList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px; font-weight: 500;">No users found</td></tr>`;
+        return;
+      }
 
       const searchTerm = document.getElementById("user-search-input").value.toLowerCase();
       const statusFilter = document.getElementById("user-status-filter").value;
@@ -1783,6 +1720,11 @@
     function renderPaymentsTable() {
       const tbody = document.getElementById("tbody-payments");
       tbody.innerHTML = "";
+
+      if (paymentsList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px; font-weight: 500;">No payments found</td></tr>`;
+        return;
+      }
 
       const filter = document.getElementById("payment-status-filter").value;
       const filtered = paymentsList.filter(p => {
@@ -2008,7 +1950,8 @@
     };
 
     window.previewScreenshot = function(url, subtitle) {
-      document.getElementById("screenshot-img").src = url;
+      const placeholder = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'><rect width='300' height='200' fill='%231a2234'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2394a3b8' font-family='sans-serif' font-size='14'>No screenshot uploaded</text></svg>";
+      document.getElementById("screenshot-img").src = (url && url.trim() !== "") ? url : placeholder;
       document.getElementById("modal-screenshot-subtitle").textContent = subtitle;
       openModal("modal-screenshot");
     };

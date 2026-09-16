@@ -25,6 +25,7 @@ data class PaymentConfig(
 )
 
 data class PaymentRecord(
+    val id: String = "",
     val uid: String = "",
     val userId: String = "",
     val name: String = "",
@@ -34,6 +35,7 @@ data class PaymentRecord(
     val amount: Int = 0,
     val transactionId: String = "",
     val status: String = "pending",
+    val screenshotUrl: String = "",
     val submittedAt: Timestamp? = null,
     val approvedAt: Timestamp? = null,
     val adminNote: String = ""

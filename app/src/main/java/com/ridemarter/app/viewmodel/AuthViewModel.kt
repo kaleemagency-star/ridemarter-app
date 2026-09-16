@@ -187,6 +187,79 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    fun registerWithEmail(
+        name: String,
+        email: String,
+        pass: String,
+        mobile: String,
+        vehicleType: String,
+        generatedUserId: String,
+        onSuccess: (UserData) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        if (email.isBlank() || pass.isBlank() || name.isBlank() || mobile.isBlank()) {
+            val err = "Please fill in all required fields"
+            _uiState.value = AuthState.Error(err)
+            onError(err)
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = AuthState.Loading
+            try {
+                val authInstance = FirebaseAuth.getInstance()
+                val authResult = authInstance.createUserWithEmailAndPassword(email.trim(), pass.trim()).await()
+                val firebaseAuthUid = authResult.user?.uid ?: throw IllegalStateException("Firebase Authentication failed to return UID")
+
+                val userId = generatedUserId.ifBlank { "SD" + firebaseAuthUid.take(8).uppercase() }
+                val newUser = UserData(
+                    uid = firebaseAuthUid,
+                    userId = userId,
+                    name = name.trim(),
+                    email = email.trim(),
+                    mobile = mobile.trim(),
+                    vehicleType = vehicleType,
+                    planName = "none",
+                    planStatus = "none",
+                    paymentStatus = "none",
+                    approved = false,
+                    status = "pending",
+                    loginType = "email"
+                )
+
+                // 2. Save data in Cloud Firestore at: users/{firebaseAuthUid}
+                // Fields: name, email, mobile, vehicleType, planName, planStatus: "none", paymentStatus: "none", createdAt: server timestamp
+                val db = FirebaseFirestore.getInstance()
+                val firestoreMap = hashMapOf<String, Any?>(
+                    "name" to newUser.name,
+                    "email" to newUser.email,
+                    "mobile" to newUser.mobile,
+                    "vehicleType" to newUser.vehicleType,
+                    "planName" to "none",
+                    "planStatus" to "none",
+                    "paymentStatus" to "none",
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "uid" to firebaseAuthUid,
+                    "userId" to userId,
+                    "approved" to false,
+                    "status" to "pending",
+                    "loginType" to "email"
+                )
+
+                db.collection("users").document(firebaseAuthUid).set(firestoreMap).await()
+
+                _currentUserData.value = newUser
+                _uiState.value = AuthState.UserPending(newUser)
+                onSuccess(newUser)
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Registration error: ${e.message}", e)
+                val msg = e.localizedMessage ?: "Registration failed. Please check credentials."
+                _uiState.value = AuthState.Error(msg)
+                onError(msg)
+            }
+        }
+    }
+
     fun signInWithEmail(
         email: String,
         pass: String,
@@ -198,32 +271,10 @@ class AuthViewModel : ViewModel() {
             return
         }
 
-        if (!isFirebaseAvailable()) {
-            val demoUser = UserData(
-                uid = "demo_driver_uid",
-                userId = "SDDEMO01",
-                name = "Demo Driver",
-                email = email,
-                mobile = "9876543210",
-                approved = true,
-                status = "approved",
-                planStatus = "active",
-                planName = "7 Days"
-            )
-            _currentUserData.value = demoUser
-            _uiState.value = AuthState.UserActive(demoUser)
-            onSuccess?.invoke(demoUser)
-            return
-        }
-
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             try {
-                val authInstance = auth
-                if (authInstance == null) {
-                    _uiState.value = AuthState.Success("Signed in")
-                    return@launch
-                }
+                val authInstance = FirebaseAuth.getInstance()
                 val authResult = authInstance.signInWithEmailAndPassword(email.trim(), pass.trim()).await()
                 val user = authResult.user
                 if (user != null) {
@@ -242,33 +293,48 @@ class AuthViewModel : ViewModel() {
     fun saveUserToFirestore(userData: UserData, onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
-            val targetUid = if (userData.uid.isNotBlank()) {
-                userData.uid
-            } else {
-                (try { auth?.currentUser?.uid } catch (e: Exception) { null } ?: UUID.randomUUID().toString())
-            }
+            val firebaseAuthUid = try { FirebaseAuth.getInstance().currentUser?.uid } catch (e: Exception) { null }
+                ?: userData.uid.ifBlank { UUID.randomUUID().toString() }
+
             val finalUser = userData.copy(
-                uid = targetUid,
-                userId = if (userData.userId.isNotBlank()) userData.userId else "SD" + targetUid.take(8).uppercase()
+                uid = firebaseAuthUid,
+                userId = if (userData.userId.isNotBlank()) userData.userId else "SD" + firebaseAuthUid.take(8).uppercase(),
+                planStatus = "none",
+                paymentStatus = "none",
+                planName = userData.planName.ifEmpty { "none" }
             )
 
-            if (!isFirebaseAvailable()) {
-                _currentUserData.value = finalUser
-                _uiState.value = AuthState.UserPending(finalUser)
-                onComplete()
-                return@launch
-            }
-
             try {
-                val db = firestore
-                if (db != null) {
-                    db.collection("users").document(targetUid).set(finalUser.toMap()).await()
-                }
+                val db = FirebaseFirestore.getInstance()
+                // 2. Save data in Cloud Firestore at: users/{firebaseAuthUid}
+                // Fields: name, email, mobile, vehicleType, planName, planStatus: "none", paymentStatus: "none", createdAt: server timestamp
+                val firestoreMap = hashMapOf<String, Any?>(
+                    "name" to finalUser.name,
+                    "email" to finalUser.email,
+                    "mobile" to finalUser.mobile,
+                    "vehicleType" to finalUser.vehicleType,
+                    "planName" to finalUser.planName,
+                    "planStatus" to "none",
+                    "paymentStatus" to "none",
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "uid" to firebaseAuthUid,
+                    "userId" to finalUser.userId,
+                    "approved" to finalUser.approved,
+                    "status" to finalUser.status,
+                    "loginType" to finalUser.loginType,
+                    "profilePhotoUrl" to finalUser.profilePhotoUrl,
+                    "serviceActive" to finalUser.serviceActive
+                )
+
+                db.collection("users").document(firebaseAuthUid)
+                    .set(firestoreMap, com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+
                 _currentUserData.value = finalUser
                 _uiState.value = AuthState.UserPending(finalUser)
                 onComplete()
             } catch (e: Exception) {
-                Log.w("AuthViewModel", "Firestore save error: ${e.message}")
+                Log.e("AuthViewModel", "Firestore save error: ${e.message}", e)
                 _currentUserData.value = finalUser
                 _uiState.value = AuthState.UserPending(finalUser)
                 onComplete()
@@ -277,12 +343,6 @@ class AuthViewModel : ViewModel() {
     }
 
     fun checkUserStatus(onResult: ((UserData?) -> Unit)? = null) {
-        if (!isFirebaseAvailable()) {
-            val current = _currentUserData.value
-            onResult?.invoke(current)
-            return
-        }
-
         val user = try { auth?.currentUser } catch (e: Exception) { null }
         val uid = user?.uid ?: _currentUserData.value?.uid
         if (uid.isNullOrBlank()) {
@@ -302,10 +362,12 @@ class AuthViewModel : ViewModel() {
                     val approved = doc.getBoolean("approved") ?: false
                     val status = doc.getString("status") ?: "pending"
                     val planStatus = doc.getString("planStatus") ?: "none"
+                    val paymentStatus = doc.getString("paymentStatus") ?: "none"
                     val name = doc.getString("name") ?: ""
                     val email = doc.getString("email") ?: ""
                     val mobile = doc.getString("mobile") ?: ""
                     val vehicleType = doc.getString("vehicleType") ?: ""
+                    val planName = doc.getString("planName") ?: ""
                     val userId = doc.getString("userId") ?: ("SD" + uid.take(8).uppercase())
 
                     val data = UserData(
@@ -317,11 +379,13 @@ class AuthViewModel : ViewModel() {
                         vehicleType = vehicleType,
                         approved = approved,
                         status = status,
-                        planStatus = planStatus
+                        planStatus = planStatus,
+                        planName = planName,
+                        paymentStatus = paymentStatus
                     )
                     _currentUserData.value = data
                     when {
-                        approved && planStatus == "active" -> _uiState.value = AuthState.UserActive(data)
+                        approved && (planStatus == "active" || paymentStatus == "approved") -> _uiState.value = AuthState.UserActive(data)
                         approved -> _uiState.value = AuthState.UserApproved(data)
                         else -> _uiState.value = AuthState.UserPending(data)
                     }
@@ -342,20 +406,15 @@ class AuthViewModel : ViewModel() {
         uid: String,
         onRequireRegistration: ((String, String) -> Unit)? = null
     ) {
-        if (!isFirebaseAvailable()) {
-            val name = _googleProfile.value?.first ?: ""
-            val email = _googleProfile.value?.second ?: ""
-            onRequireRegistration?.invoke(name, email)
-            return
-        }
-
         viewModelScope.launch {
             try {
-                val db = firestore ?: return@launch
+                val db = FirebaseFirestore.getInstance()
                 val doc = db.collection("users").document(uid).get().await()
                 if (doc.exists()) {
                     val approved = doc.getBoolean("approved") ?: false
                     val planStatus = doc.getString("planStatus") ?: "none"
+                    val paymentStatus = doc.getString("paymentStatus") ?: "none"
+                    val planName = doc.getString("planName") ?: ""
                     val data = UserData(
                         uid = uid,
                         userId = doc.getString("userId") ?: ("SD" + uid.take(8).uppercase()),
@@ -365,11 +424,13 @@ class AuthViewModel : ViewModel() {
                         vehicleType = doc.getString("vehicleType") ?: "",
                         approved = approved,
                         status = doc.getString("status") ?: "pending",
-                        planStatus = planStatus
+                        planStatus = planStatus,
+                        planName = planName,
+                        paymentStatus = paymentStatus
                     )
                     _currentUserData.value = data
                     when {
-                        approved && planStatus == "active" -> _uiState.value = AuthState.UserActive(data)
+                        approved && (planStatus == "active" || paymentStatus == "approved") -> _uiState.value = AuthState.UserActive(data)
                         approved -> _uiState.value = AuthState.UserApproved(data)
                         else -> _uiState.value = AuthState.UserPending(data)
                     }
@@ -391,18 +452,15 @@ class AuthViewModel : ViewModel() {
         onRequireRegistration: ((String, String) -> Unit)? = null,
         onSuccess: ((UserData) -> Unit)? = null
     ) {
-        if (!isFirebaseAvailable()) {
-            _uiState.value = AuthState.Success("Signed in (Demo Mode)")
-            return
-        }
-
         viewModelScope.launch {
             try {
-                val db = firestore ?: return@launch
+                val db = FirebaseFirestore.getInstance()
                 val doc = db.collection("users").document(uid).get().await()
                 if (doc.exists()) {
                     val approved = doc.getBoolean("approved") ?: false
                     val planStatus = doc.getString("planStatus") ?: "none"
+                    val paymentStatus = doc.getString("paymentStatus") ?: "none"
+                    val planName = doc.getString("planName") ?: ""
                     val data = UserData(
                         uid = uid,
                         userId = doc.getString("userId") ?: ("SD" + uid.take(8).uppercase()),
@@ -412,11 +470,13 @@ class AuthViewModel : ViewModel() {
                         vehicleType = doc.getString("vehicleType") ?: "",
                         approved = approved,
                         status = doc.getString("status") ?: "pending",
-                        planStatus = planStatus
+                        planStatus = planStatus,
+                        planName = planName,
+                        paymentStatus = paymentStatus
                     )
                     _currentUserData.value = data
                     when {
-                        approved && planStatus == "active" -> _uiState.value = AuthState.UserActive(data)
+                        approved && (planStatus == "active" || paymentStatus == "approved") -> _uiState.value = AuthState.UserActive(data)
                         approved -> _uiState.value = AuthState.UserApproved(data)
                         else -> _uiState.value = AuthState.UserPending(data)
                     }
@@ -426,6 +486,7 @@ class AuthViewModel : ViewModel() {
                     onRequireRegistration?.invoke("", email)
                 }
             } catch (e: Exception) {
+                Log.w("AuthViewModel", "Error fetching user profile: ${e.message}")
                 _uiState.value = AuthState.Error("Network error checking user profile")
             }
         }
