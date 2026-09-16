@@ -1,0 +1,87 @@
+name: RideMarter Android CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test RideMarter App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Ensure Template Google Services File Exists
+        run: |
+          if [ ! -f app/google-services.json ]; then
+            if [ -f app/google-services.json.template ]; then
+              cp app/google-services.json.template app/google-services.json
+            fi
+          fi
+
+      - name: Ensure .env Exists
+        run: |
+          if [ ! -f .env ] && [ -f .env.example ]; then
+            cp .env.example .env
+          fi
+
+      - name: Grant Execute Permission for Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Run Unit Tests
+        id: unit_tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build Debug APK
+        id: assemble_apk
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ridemarter-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "::error title=RideMarter Build Failed::Build failed on branch ${{ github.ref_name }} (${{ github.sha }})."
+          echo "### RideMarter Build Failed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Summary on Success
+        if: success()
+        run: |
+          echo "### RideMarter Build Succeeded!" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package**: com.ridemarter.app" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact**: ridemarter-debug-apk" >> $GITHUB_STEP_SUMMARY
