@@ -965,7 +965,16 @@
 
             <div class="metric-card accent-yellow">
               <div class="metric-header">
-                <span class="metric-label">Pending Approvals</span>
+                <span class="metric-label">Pending Drivers</span>
+                <div class="metric-icon-badge" style="background: var(--accent-yellow-soft); color: var(--accent-yellow);">🪪</div>
+              </div>
+              <div class="metric-val" id="metric-pending-drivers">0</div>
+              <div class="metric-sub">Awaiting driver approval</div>
+            </div>
+
+            <div class="metric-card accent-yellow">
+              <div class="metric-header">
+                <span class="metric-label">Pending Payments</span>
                 <div class="metric-icon-badge" style="background: var(--accent-yellow-soft); color: var(--accent-yellow);">🔔</div>
               </div>
               <div class="metric-val" id="metric-pending-payments">0</div>
@@ -1021,6 +1030,7 @@
                     <th>Name</th>
                     <th>Vehicle</th>
                     <th>Mobile</th>
+                    <th>Approval</th>
                     <th>Current Plan</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -1046,7 +1056,10 @@
                 <input class="search-box" type="text" id="user-search-input" placeholder="Search name, mobile, email..." />
                 
                 <select class="filter-select" id="user-status-filter">
-                  <option value="ALL">All Statuses</option>
+                  <option value="ALL">All Drivers</option>
+                  <option value="PENDING_APPROVAL">⏳ Pending Approval</option>
+                  <option value="APPROVED_DRIVERS">✓ Approved Drivers</option>
+                  <option value="REJECTED_DRIVERS">✕ Rejected Drivers</option>
                   <option value="ACTIVE">Active Plan</option>
                   <option value="EXPIRED">Expired Plan</option>
                   <option value="PENDING">Pending Payment</option>
@@ -1068,11 +1081,12 @@
                     <th>Driver Info</th>
                     <th>Vehicle</th>
                     <th>Contact</th>
+                    <th>Approval Status</th>
                     <th>Plan</th>
                     <th>Plan Status</th>
                     <th>Expiry Date</th>
                     <th>Payment</th>
-                    <th>Actions</th>
+                    <th>Driver Approval & Actions</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-users">
@@ -1300,6 +1314,26 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: REJECT DRIVER ================= -->
+  <div class="modal-backdrop" id="modal-reject-driver">
+    <div class="modal-box">
+      <div class="modal-title" style="color: var(--accent-red);">Reject Driver Application</div>
+      <p class="modal-desc" id="modal-reject-driver-desc">
+        Specify reason for rejecting this driver.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label" for="reject-reason-input">Rejection Reason</label>
+        <textarea class="form-input" id="reject-reason-input" rows="3" placeholder="e.g. Incomplete documentation, blurry RC/DL photo, or vehicle mismatch..." style="resize: vertical; font-family: inherit;"></textarea>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-reject-driver')">Cancel</button>
+        <button class="btn-action reject" id="btn-confirm-reject-driver" style="padding: 10px 18px; font-size: 13px;">Confirm Rejection</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: CONFIRM ACTION ================= -->
   <div class="modal-backdrop" id="modal-confirm">
     <div class="modal-box">
@@ -1520,8 +1554,14 @@
           const userSnap = await getDocs(collection(db, "users"));
           userSnap.forEach(docSnap => {
             const data = docSnap.data();
+            const isApproved = (data.approved === true);
+            let appStatus = data.approvalStatus || data.status;
+            if (!appStatus) {
+              appStatus = isApproved ? "approved" : "pending";
+            }
             usersList.push({
               id: docSnap.id,
+              userId: data.userId || ("SD" + docSnap.id.substring(0, 8).toUpperCase()),
               name: data.name || "Driver",
               email: data.email || "-",
               mobile: data.mobile || "-",
@@ -1531,7 +1571,9 @@
               paymentStatus: data.paymentStatus || "none",
               planExpiry: data.planExpiry ? (data.planExpiry.toDate ? data.planExpiry.toDate() : new Date(data.planExpiry)) : null,
               createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : null,
-              approved: data.approved || false
+              approved: isApproved,
+              approvalStatus: appStatus,
+              rejectionReason: data.rejectionReason || ""
             });
           });
 
@@ -1576,12 +1618,15 @@
       const total = usersList.length;
       const active = usersList.filter(u => u.planStatus === "active" && u.planExpiry && new Date(u.planExpiry) > now).length;
       const expired = usersList.filter(u => u.planStatus === "expired" || (u.planExpiry && new Date(u.planExpiry) <= now)).length;
-      const pending = paymentsList.filter(p => p.status === "pending").length;
+      const pendingPayments = paymentsList.filter(p => p.status === "pending").length;
+      const pendingDrivers = usersList.filter(u => u.approvalStatus === "pending" || (!u.approved && u.approvalStatus !== "rejected")).length;
 
       document.getElementById("metric-total-users").textContent = total;
       document.getElementById("metric-active-users").textContent = active;
       document.getElementById("metric-expired-users").textContent = expired;
-      document.getElementById("metric-pending-payments").textContent = pending;
+      const pendingDriversEl = document.getElementById("metric-pending-drivers");
+      if (pendingDriversEl) pendingDriversEl.textContent = pendingDrivers;
+      document.getElementById("metric-pending-payments").textContent = pendingPayments;
       document.getElementById("metric-recent-orders").textContent = paymentsList.length;
 
       // Dashboard Pending Preview
@@ -1616,19 +1661,31 @@
       const tbodyRecentUsers = document.getElementById("tbody-dashboard-recent-users");
       tbodyRecentUsers.innerHTML = "";
       if (usersList.length === 0) {
-        tbodyRecentUsers.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px; font-weight: 500;">No users found</td></tr>`;
+        tbodyRecentUsers.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px; font-weight: 500;">No users found</td></tr>`;
       } else {
         usersList.slice(0, 5).forEach(u => {
           const tr = document.createElement("tr");
+          let actionBtns = '';
+          if (u.approvalStatus === "pending") {
+            actionBtns = `
+              <div class="action-btn-group">
+                <button class="btn-action approve" onclick="approveDriver('${u.id}')">Approve</button>
+                <button class="btn-action reject" onclick="openRejectDriverModal('${u.id}')">Reject</button>
+              </div>
+            `;
+          } else {
+            actionBtns = `
+              <button class="btn-action" onclick="openActivateModal('${u.id}')">Activate</button>
+            `;
+          }
           tr.innerHTML = `
             <td><strong>${u.name}</strong><br><small style="color: var(--text-muted);">${u.email}</small></td>
             <td><span class="badge badge-gray">${u.vehicleType}</span></td>
             <td>${u.mobile}</td>
+            <td>${getApprovalBadge(u.approvalStatus, u.rejectionReason)}</td>
             <td>${u.planName}</td>
             <td>${getStatusBadge(u.planStatus)}</td>
-            <td>
-              <button class="btn-action" onclick="openActivateModal('${u.id}')">Activate / Extend</button>
-            </td>
+            <td>${actionBtns}</td>
           `;
           tbodyRecentUsers.appendChild(tr);
         });
@@ -1641,7 +1698,7 @@
       tbody.innerHTML = "";
 
       if (usersList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px; font-weight: 500;">No users found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px; font-weight: 500;">No users found</td></tr>`;
         return;
       }
 
@@ -1652,13 +1709,20 @@
       const filtered = usersList.filter(u => {
         const matchSearch = u.name.toLowerCase().includes(searchTerm) || 
                             u.mobile.includes(searchTerm) || 
-                            u.email.toLowerCase().includes(searchTerm);
+                            u.email.toLowerCase().includes(searchTerm) ||
+                            (u.userId && u.userId.toLowerCase().includes(searchTerm));
 
         const isAct = u.planStatus === "active";
         const isExp = u.planStatus === "expired";
         const isPend = u.planStatus === "pending";
+        const isPendAppr = u.approvalStatus === "pending" || (!u.approved && u.approvalStatus !== "rejected");
+        const isAppr = u.approvalStatus === "approved" || u.approved === true;
+        const isRej = u.approvalStatus === "rejected";
 
         let matchStatus = true;
+        if (statusFilter === "PENDING_APPROVAL") matchStatus = isPendAppr;
+        if (statusFilter === "APPROVED_DRIVERS") matchStatus = isAppr;
+        if (statusFilter === "REJECTED_DRIVERS") matchStatus = isRej;
         if (statusFilter === "ACTIVE") matchStatus = isAct;
         if (statusFilter === "EXPIRED") matchStatus = isExp;
         if (statusFilter === "PENDING") matchStatus = isPend;
@@ -1672,27 +1736,52 @@
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">No matching drivers found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">No matching drivers found</td></tr>`;
         return;
       }
 
       filtered.forEach(u => {
         const tr = document.createElement("tr");
+
+        let approvalControlsHtml = '';
+        if (u.approvalStatus === "pending") {
+          approvalControlsHtml = `
+            <button class="btn-action approve" onclick="approveDriver('${u.id}')" title="Approve driver access">Approve Driver</button>
+            <button class="btn-action reject" onclick="openRejectDriverModal('${u.id}')" title="Reject driver application">Reject Driver</button>
+          `;
+        } else if (u.approvalStatus === "approved") {
+          approvalControlsHtml = `
+            <button class="btn-action reject" onclick="openRejectDriverModal('${u.id}')" title="Reject driver">Reject</button>
+            <button class="btn-action" onclick="resetDriverToPending('${u.id}')" title="Reset to pending">Reset Pending</button>
+          `;
+        } else { // rejected
+          approvalControlsHtml = `
+            <button class="btn-action approve" onclick="approveDriver('${u.id}')" title="Approve driver access">Approve Driver</button>
+            <button class="btn-action" onclick="resetDriverToPending('${u.id}')" title="Reset to pending">Reset Pending</button>
+          `;
+        }
+
         tr.innerHTML = `
           <td>
             <strong>${u.name}</strong><br>
             <small style="color: var(--text-muted);">${u.email}</small>
+            ${u.userId ? `<br><code style="font-size: 10px; color: var(--text-secondary);">${u.userId}</code>` : ''}
           </td>
           <td><span class="badge badge-gray">${u.vehicleType}</span></td>
           <td>${u.mobile}</td>
+          <td>
+            ${getApprovalBadge(u.approvalStatus, u.rejectionReason)}
+            ${u.approvalStatus === "rejected" && u.rejectionReason ? `<div style="font-size: 11px; color: var(--accent-red); margin-top: 4px; max-width: 150px; white-space: normal;">Reason: ${u.rejectionReason}</div>` : ''}
+          </td>
           <td><strong>${u.planName}</strong></td>
           <td>${getStatusBadge(u.planStatus)}</td>
           <td>${u.planExpiry ? formatDate(u.planExpiry) : '<span style="color: var(--text-muted);">-</span>'}</td>
           <td>${getPaymentBadge(u.paymentStatus)}</td>
           <td>
-            <div class="action-btn-group">
-              <button class="btn-action" onclick="openActivateModal('${u.id}')">Activate</button>
-              <button class="btn-action" onclick="revokeUserPlan('${u.id}')" title="Expire plan">Revoke</button>
+            <div class="action-btn-group" style="flex-wrap: wrap; gap: 4px;">
+              ${approvalControlsHtml}
+              <button class="btn-action" onclick="openActivateModal('${u.id}')" title="Activate / extend subscription">Plan</button>
+              ${u.planStatus === "active" ? `<button class="btn-action" onclick="revokeUserPlan('${u.id}')" title="Revoke plan">Revoke</button>` : ''}
               <button class="btn-action danger" onclick="confirmDeleteUser('${u.id}')" title="Delete account">✕</button>
             </div>
           </td>
@@ -1755,6 +1844,15 @@
       return `<span class="badge badge-gray">None</span>`;
     }
 
+    function getApprovalBadge(status, rejectionReason) {
+      if (status === "approved") return `<span class="badge badge-green">✓ Approved</span>`;
+      if (status === "rejected") {
+        const title = rejectionReason ? `title="Reason: ${rejectionReason}"` : '';
+        return `<span class="badge badge-red" ${title}>✕ Rejected</span>`;
+      }
+      return `<span class="badge badge-yellow">⏳ Pending</span>`;
+    }
+
     function getPaymentBadge(status) {
       if (status === "approved") return `<span class="badge badge-green">Approved</span>`;
       if (status === "rejected") return `<span class="badge badge-red">Rejected</span>`;
@@ -1767,6 +1865,112 @@
       const d = new Date(dateObj);
       return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     }
+
+    // DRIVER APPROVAL ACTIONS
+    let selectedDriverForReject = null;
+
+    window.approveDriver = async function(driverUid) {
+      const user = usersList.find(u => u.id === driverUid);
+      if (!user) return;
+
+      user.approved = true;
+      user.approvalStatus = "approved";
+      user.status = "approved";
+      user.rejectionReason = "";
+
+      if (db) {
+        try {
+          await updateDoc(doc(db, "users", driverUid), {
+            approvalStatus: "approved",
+            approved: true,
+            status: "approved",
+            rejectionReason: "",
+            reviewedAt: Timestamp.now()
+          });
+        } catch (e) {
+          console.error("Firestore driver approval error:", e);
+          showToast("Failed to update approval in Firestore: " + e.message, true);
+          return;
+        }
+      }
+
+      showToast(`Driver ${user.name} approved successfully!`);
+      renderDashboardMetrics();
+      renderUsersTable();
+    };
+
+    window.openRejectDriverModal = function(driverUid) {
+      selectedDriverForReject = usersList.find(u => u.id === driverUid);
+      if (!selectedDriverForReject) return;
+
+      document.getElementById("modal-reject-driver-desc").textContent =
+        `Specify reason for rejecting ${selectedDriverForReject.name} (${selectedDriverForReject.mobile}):`;
+      document.getElementById("reject-reason-input").value = selectedDriverForReject.rejectionReason || "";
+      openModal("modal-reject-driver");
+    };
+
+    document.getElementById("btn-confirm-reject-driver").addEventListener("click", async () => {
+      if (!selectedDriverForReject) return;
+
+      const reason = document.getElementById("reject-reason-input").value.trim() || "Application rejected. Please contact support.";
+      const driverUid = selectedDriverForReject.id;
+
+      selectedDriverForReject.approved = false;
+      selectedDriverForReject.approvalStatus = "rejected";
+      selectedDriverForReject.status = "rejected";
+      selectedDriverForReject.rejectionReason = reason;
+
+      if (db) {
+        try {
+          await updateDoc(doc(db, "users", driverUid), {
+            approvalStatus: "rejected",
+            approved: false,
+            status: "rejected",
+            rejectionReason: reason,
+            reviewedAt: Timestamp.now()
+          });
+        } catch (e) {
+          console.error("Firestore driver rejection error:", e);
+          showToast("Failed to update rejection in Firestore: " + e.message, true);
+          return;
+        }
+      }
+
+      closeModal("modal-reject-driver");
+      showToast(`Driver ${selectedDriverForReject.name} application marked as Rejected`, true);
+      renderDashboardMetrics();
+      renderUsersTable();
+    });
+
+    window.resetDriverToPending = async function(driverUid) {
+      const user = usersList.find(u => u.id === driverUid);
+      if (!user) return;
+
+      user.approved = false;
+      user.approvalStatus = "pending";
+      user.status = "pending";
+      user.rejectionReason = "";
+
+      if (db) {
+        try {
+          await updateDoc(doc(db, "users", driverUid), {
+            approvalStatus: "pending",
+            approved: false,
+            status: "pending",
+            rejectionReason: "",
+            reviewedAt: Timestamp.now()
+          });
+        } catch (e) {
+          console.error("Firestore driver reset error:", e);
+          showToast("Failed to reset driver in Firestore: " + e.message, true);
+          return;
+        }
+      }
+
+      showToast(`Driver ${user.name} reset to Pending Approval`);
+      renderDashboardMetrics();
+      renderUsersTable();
+    };
 
     // USER ACTIONS
     window.openActivateModal = function(userId) {

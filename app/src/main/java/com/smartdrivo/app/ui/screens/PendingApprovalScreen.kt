@@ -32,8 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
@@ -79,7 +77,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.smartdrivo.app.ui.components.DriverApprovalSheet
 import com.smartdrivo.app.ui.theme.BrandGreenPrimary
 import com.smartdrivo.app.ui.theme.BrandOrangeSecondary
 import com.smartdrivo.app.ui.theme.DarkBackground
@@ -109,8 +106,6 @@ fun PendingApprovalScreen(
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     var isChecking by remember { mutableStateOf(false) }
-    var isApprovingCurrent by remember { mutableStateOf(false) }
-    var showApprovalControlsSheet by remember { mutableStateOf(false) }
 
     val userId = currentUserData?.userId ?: authViewModel.generateUserId()
     val currentUid = currentUserData?.uid ?: authViewModel.getCurrentUser()?.uid
@@ -475,89 +470,9 @@ fun PendingApprovalScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Admin Driver Approval Controls Button
-                Button(
-                    onClick = {
-                        showApprovalControlsSheet = true
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DarkSurfaceVariant,
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, BrandGreenPrimary.copy(alpha = 0.5f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("admin_approval_controls_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AdminPanelSettings,
-                        contentDescription = "Admin Approval Controls",
-                        tint = BrandGreenPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Driver Approval Controls",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = Color.White
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Quick Instant Approve Button for Admin / Testing
-                if (!currentUid.isNullOrBlank()) {
-                    OutlinedButton(
-                        onClick = {
-                            isApprovingCurrent = true
-                            authViewModel.updateDriverApproval(
-                                driverUid = currentUid,
-                                approved = true,
-                                status = "approved",
-                                onSuccess = {
-                                    isApprovingCurrent = false
-                                    Toast.makeText(context, "Account Approved!", Toast.LENGTH_SHORT).show()
-                                    onNavigateToPayment()
-                                },
-                                onError = { err ->
-                                    isApprovingCurrent = false
-                                    Toast.makeText(context, "Approval failed: $err", Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BrandOrangeSecondary),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandOrangeSecondary),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp)
-                            .testTag("instant_approve_button")
-                    ) {
-                        if (isApprovingCurrent) {
-                            CircularProgressIndicator(color = BrandOrangeSecondary, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                        } else {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Approve This Account (Instant Demo)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
-    }
-
-    if (showApprovalControlsSheet) {
-        DriverApprovalSheet(
-            authViewModel = authViewModel,
-            onDismiss = { showApprovalControlsSheet = false }
-        )
     }
 }
 

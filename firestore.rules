@@ -24,15 +24,41 @@ service cloud.firestore {
 
     // Users collection (users/{firebaseAuthUid})
     match /users/{userId} {
-      // Drivers can read only their own profile; Admin can read and list all profiles
+      // Drivers can read/listen only to their own profile: users/{FirebaseAuth.currentUser.uid}
+      // Admin can get any document
       allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
 
-      // Drivers can create their own document on registration with their matching UID
-      allow create: if (isOwner(userId) && request.resource.data.uid == request.auth.uid) || isAdmin();
+      // Admin can list all users. Authenticated users may query with limit <= 10 (for duplicate mobile check). Unauthenticated listing is forbidden.
+      allow list: if isAdmin() || (isAuthenticated() && request.query.limit <= 10);
 
-      // Drivers can update their own user document; Admin can update any document (activate/revoke plans)
-      allow update: if (isOwner(userId) && request.resource.data.uid == request.auth.uid) || isAdmin();
+      // Registration: Drivers may create ONLY their own users/{uid} document with approvalStatus "pending" and approved false.
+      // Admin can create any user document.
+      allow create: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.approved == false &&
+        request.resource.data.approvalStatus == 'pending' &&
+        request.resource.data.planStatus == 'none' &&
+        request.resource.data.paymentStatus == 'none'
+      );
+
+      // Updates:
+      // Only authenticated admin email kaleemagency@gmail.com can change approval, plan, payment, or privileged fields.
+      // Drivers cannot approve themselves by editing their own document.
+      // Drivers may update ONLY safe profile fields such as name, mobile, vehicleType, profilePhotoUrl, serviceActive, updatedAt.
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.approved == resource.data.approved &&
+        request.resource.data.approvalStatus == resource.data.approvalStatus &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.planStatus == resource.data.planStatus &&
+        request.resource.data.planName == resource.data.planName &&
+        (!('planExpiry' in request.resource.data) || request.resource.data.planExpiry == resource.data.planExpiry) &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        (!('rejectionReason' in request.resource.data) || request.resource.data.rejectionReason == resource.data.rejectionReason) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'mobile', 'vehicleType', 'profilePhotoUrl', 'serviceActive', 'updatedAt'])
+      );
 
       // Only Admin can delete user accounts
       allow delete: if isAdmin();
